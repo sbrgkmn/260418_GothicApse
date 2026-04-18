@@ -67,6 +67,36 @@
       gap: 0.35rem;
     }
 
+    .control-section {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 1rem;
+      padding-top: 0.25rem;
+      margin-top: 0.1rem;
+      border-top: 1px dashed var(--line);
+    }
+
+    .control-section:first-child {
+      padding-top: 0;
+      margin-top: 0;
+      border-top: 0;
+    }
+
+    .control-section h3 {
+      margin: 0;
+      font-size: 0.76rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .control-section span {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
     .control label {
       font-size: 0.85rem;
       letter-spacing: 0.015em;
@@ -87,6 +117,16 @@
       color: var(--muted);
       font-size: 0.8rem;
       min-height: 1em;
+    }
+
+    .static-readout {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0.55rem 0.7rem;
+      background: linear-gradient(180deg, #fbfbfa, #f2f2ef);
+      font-size: 0.9rem;
+      color: #1e1e1e;
     }
 
     .actions {
@@ -114,6 +154,12 @@
     button:hover {
       transform: translateY(-1px);
       opacity: 0.95;
+    }
+
+    button.secondary {
+      background: #fafaf8;
+      color: #1f1f1f;
+      border-color: var(--line);
     }
 
     .note {
@@ -165,14 +211,19 @@
 <body>
   <div class="shell">
     <div class="header">
-      <h1>Recursive Apse Generator: Plan + Abstract 3D</h1>
+      <h1>Recursive Apse Generator: Plan + 3D Rib Web</h1>
       <p>
-        Rule-based 2D recursion drives an abstract 3D triangle system using shared symmetry and sequence logic.
+        Rule-based 2D recursion drives a fixed exterior isometric rib web built from central, ambulatory, and chapel vault divisions as a single line layer.
         No server is required; this runs locally as a static HTML file.
       </p>
     </div>
 
     <div class="controls">
+      <div class="control-section">
+        <h3>Plan</h3>
+        <span>Recursive plan rules shared by plan and shell</span>
+      </div>
+
       <div class="control">
         <label for="edges">Number of edges (odd)</label>
         <input type="range" id="edges" min="3" max="11" step="2" value="7" />
@@ -203,10 +254,15 @@
         <div class="value-row"><span>recursive stop</span><span id="divisionThresholdValue">80</span></div>
       </div>
 
+      <div class="control-section">
+        <h3>Massing</h3>
+        <span>Pointed-arch rib web with a single visible vault line layer</span>
+      </div>
+
       <div class="control">
-        <label for="columnSize">Column size factor</label>
+        <label for="columnSize">2D marker size</label>
         <input type="range" id="columnSize" min="5" max="100" value="50" />
-        <div class="value-row"><span>scale</span><span id="columnSizeValue">0.50</span></div>
+        <div class="value-row"><span>plan markers only</span><span id="columnSizeValue">0.50</span></div>
       </div>
 
       <div class="control">
@@ -233,22 +289,34 @@
         <div class="value-row"><span>3D only</span><span id="depthScaleValue">1.00</span></div>
       </div>
 
+      <div class="control-section">
+        <h3>View</h3>
+        <span>Exterior isometric projection locked to the outside of the apse</span>
+      </div>
+
       <div class="control">
-        <label for="rotationY">3D rotation Y</label>
-        <input type="range" id="rotationY" min="-180" max="180" value="35" />
-        <div class="value-row"><span>degrees</span><span id="rotationYValue">35°</span></div>
+        <label>3D camera</label>
+        <div class="static-readout">Fixed exterior isometric</div>
+        <div class="value-row"><span>drag pans, wheel zooms</span><span>double-click resets</span></div>
+      </div>
+
+      <div class="control-section">
+        <h3>Randomness</h3>
+        <span>Randomize writes a new seed, Apply Seed replays the visible one</span>
       </div>
 
       <div class="control">
         <label for="seed">Seed (uint32)</label>
         <input type="number" id="seed" min="0" max="4294967295" value="73213" />
-        <div class="value-row"><span>for deterministic randomize</span><span id="seedValue">73213</span></div>
+        <div class="value-row"><span>reproducible state id</span><span id="seedValue">73213</span></div>
       </div>
 
       <div class="actions">
-        <button id="randomizeButton" type="button">Randomize (Seeded)</button>
+        <button id="randomizeButton" type="button">Randomize</button>
+        <button id="applySeedButton" class="secondary" type="button">Apply Seed</button>
+        <button id="resetViewButton" class="secondary" type="button">Reset View</button>
         <button id="exportButton" type="button">Export PNG (2D + 3D)</button>
-        <span class="note">Tip: drag to rotate, Shift/right-drag to pan, wheel to zoom. Same seed + controls = same output.</span>
+        <span class="note">The 3D view stays fixed outside the apse. Pointed ribs now rise from plan divisions as a single vault layer.</span>
       </div>
     </div>
 
@@ -258,7 +326,7 @@
         <canvas id="planCanvas" width="760" height="560"></canvas>
       </div>
       <div class="panel">
-        <h2>Abstract 3D</h2>
+        <h2>3D Rib Web</h2>
         <canvas id="view3dCanvas" width="760" height="560"></canvas>
       </div>
     </div>
@@ -267,7 +335,7 @@
   <script>
     /** @typedef {{x:number, y:number}} Point2 */
     /** @typedef {{x:number, y:number, z:number}} Point3 */
-    /** @typedef {{a:Point3, b:Point3, c:Point3, shade:number}} Triangle3 */
+    /** @typedef {{points:Point3[], shade:number, width:number, alpha:number, kind:string}} Curve3D */
     /** @typedef {{p1:Point2, p2:Point2, level:number, kind:string}} Segment2 */
 
     /**
@@ -282,7 +350,6 @@
      * @property {number} wallThickness
      * @property {number} heightScale
      * @property {number} depthScale
-     * @property {number} rotationY
      * @property {number} seed
      */
 
@@ -337,8 +404,7 @@
 
     /**
      * @typedef {Object} Mesh3D
-     * @property {Triangle3[]} triangles
-     * @property {{a:Point3,b:Point3}[]} wireEdges
+     * @property {Curve3D[]} curves
      * @property {{minX:number,maxX:number,minY:number,maxY:number,minZ:number,maxZ:number}} bounds
      */
 
@@ -354,13 +420,14 @@
       apseRatio: document.getElementById('apseRatio'),
       divisionThreshold: document.getElementById('divisionThreshold'),
       columnSize: document.getElementById('columnSize'),
-      chapelScale: document.getElementById('chapelScale'),
-      wallThickness: document.getElementById('wallThickness'),
-      heightScale: document.getElementById('heightScale'),
-      depthScale: document.getElementById('depthScale'),
-      rotationY: document.getElementById('rotationY'),
+     chapelScale: document.getElementById('chapelScale'),
+     wallThickness: document.getElementById('wallThickness'),
+     heightScale: document.getElementById('heightScale'),
+     depthScale: document.getElementById('depthScale'),
       seed: document.getElementById('seed'),
       randomizeButton: document.getElementById('randomizeButton'),
+      applySeedButton: document.getElementById('applySeedButton'),
+      resetViewButton: document.getElementById('resetViewButton'),
       exportButton: document.getElementById('exportButton')
     };
 
@@ -375,15 +442,13 @@
       wallThickness: document.getElementById('wallThicknessValue'),
       heightScale: document.getElementById('heightScaleValue'),
       depthScale: document.getElementById('depthScaleValue'),
-      rotationY: document.getElementById('rotationYValue'),
       seed: document.getElementById('seedValue')
     };
 
     const TAU = Math.PI * 2;
+    const FIXED_ISO_YAW = 135;
+    const FIXED_ISO_PITCH = 35.264389682754654;
     const viewState = {
-      baseOrbitY: parseInt(controls.rotationY.value, 10) || 35,
-      orbitYDelta: 0,
-      orbitX: 35,
       panX: 0,
       panY: 0,
       zoom: 1
@@ -391,7 +456,6 @@
     const pointerState = {
       active: false,
       pointerId: null,
-      mode: 'rotate',
       lastX: 0,
       lastY: 0
     };
@@ -430,6 +494,18 @@
         t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       };
+    }
+
+    /**
+     * @returns {number}
+     */
+    function randomUint32() {
+      if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        const values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        return values[0] >>> 0;
+      }
+      return Math.floor(Math.random() * 4294967296) >>> 0;
     }
 
     /**
@@ -473,7 +549,11 @@
         sequence: randomSequence,
         apseSize: Math.floor(rand() * 301) + 150,
         apseRatio: (Math.floor(rand() * 51) + 30) / 100,
-        divisionThreshold: Math.floor(rand() * 91) + 30
+        divisionThreshold: Math.floor(rand() * 91) + 30,
+        chapelScale: (Math.floor(rand() * 19) + 68) / 100,
+        wallThickness: Math.floor(rand() * 9) + 8,
+        heightScale: Math.floor(rand() * 101) + 90,
+        depthScale: (Math.floor(rand() * 41) + 85) / 100
       };
     }
 
@@ -820,17 +900,6 @@
     }
 
     /**
-     * @param {Point3} a
-     * @param {Point3} b
-     * @param {Point3} c
-     * @param {number} shade
-     * @returns {Triangle3}
-     */
-    function triangle(a, b, c, shade) {
-      return { a, b, c, shade };
-    }
-
-    /**
      * @param {Point2} a1
      * @param {Point2} a2
      * @param {Point2} b1
@@ -864,219 +933,319 @@
     }
 
     /**
-     * @param {number} radialNorm
-     * @param {number} levelNorm
-     * @param {ApseParams} params
-     * @returns {number}
-     */
-    function cascadeHeightValue(radialNorm, levelNorm, params) {
-      const terraceCount = Math.max(4, params.sequence.length * 2 + 2);
-      const base = clamp(0.72 * radialNorm + 0.28 * levelNorm, 0, 1);
-      const stepped = Math.floor(base * terraceCount) / terraceCount;
-      const topY = params.heightScale * 0.12;
-      const bottomY = -params.heightScale * 1.38;
-      return topY + (bottomY - topY) * stepped;
-    }
-
-    /**
      * @param {Geometry2D} geometry2D
      * @param {ApseParams} params
      * @returns {Mesh3D}
      */
-    function build3DTriangles(geometry2D, params) {
-      const triangles = [];
-      const wireEdges = [];
-
-      /** @type {Map<string, number>} */
-      const pointIndex = new Map();
-      /** @type {{x:number,y:number,level:number}[]} */
-      const planVertices = [];
-      /** @type {{i:number,j:number,k:number,shade:number}[]} */
-      const topTriangles = [];
-
-      const bounds2D = geometry2D.meta.bounds;
-      const maxRadius = Math.max(
-        1,
-        Math.hypot(bounds2D.minX, bounds2D.minY),
-        Math.hypot(bounds2D.maxX, bounds2D.maxY),
-        geometry2D.meta.outerRadius + geometry2D.meta.chapelSize
-      );
-      let maxLevel = 1;
+    function build3DRibNetwork(geometry2D, params) {
+      /** @type {Curve3D[]} */
+      const curves = [];
+      const maxRingLevel = geometry2D.rings.reduce((max, ring) => Math.max(max, ring.level), 0);
+      const maxChapelLevel = geometry2D.chapels.reduce((max, chapel) => Math.max(max, chapel.level), 0);
+      const heightBase = params.heightScale;
 
       /**
-       * @param {Point2} p
-       * @returns {string}
+       * @param {Point2} point
+       * @param {number} y
+       * @returns {Point3}
        */
-      function pointKey(p) {
-        return `${p.x.toFixed(5)}|${p.y.toFixed(5)}`;
+      function to3D(point, y) {
+        return {
+          x: point.x,
+          y,
+          z: point.y * params.depthScale
+        };
       }
 
       /**
-       * @param {Point2} p
-       * @param {number} level
-       * @returns {number}
+       * @param {Point3} p0
+       * @param {Point3} p1
+       * @param {Point3} p2
+       * @param {Point3} p3
+       * @param {number} t
+       * @returns {Point3}
        */
-      function getVertexIndex(p, level) {
-        const key = pointKey(p);
-        if (pointIndex.has(key)) {
-          const idx = pointIndex.get(key);
-          if (idx !== undefined) {
-            planVertices[idx].level = Math.max(planVertices[idx].level, level);
-            maxLevel = Math.max(maxLevel, planVertices[idx].level);
-            return idx;
-          }
-        }
-        const idx = planVertices.length;
-        pointIndex.set(key, idx);
-        planVertices.push({ x: p.x, y: p.y, level });
-        maxLevel = Math.max(maxLevel, level);
-        return idx;
+      function cubicPoint(p0, p1, p2, p3, t) {
+        const inv = 1 - t;
+        return {
+          x: inv * inv * inv * p0.x + 3 * inv * inv * t * p1.x + 3 * inv * t * t * p2.x + t * t * t * p3.x,
+          y: inv * inv * inv * p0.y + 3 * inv * inv * t * p1.y + 3 * inv * t * t * p2.y + t * t * t * p3.y,
+          z: inv * inv * inv * p0.z + 3 * inv * inv * t * p1.z + 3 * inv * t * t * p2.z + t * t * t * p3.z
+        };
       }
 
       /**
-       * @param {number} i
-       * @param {number} j
-       * @param {number} k
+       * @param {Point3[]} points
        * @param {number} shade
+       * @param {number} width
+       * @param {number} alpha
+       * @param {string} kind
        */
-      function addTopTriangle(i, j, k, shade) {
-        if (i === j || j === k || i === k) {
+      function addCurve(points, shade, width, alpha, kind) {
+        if (points.length < 2) {
           return;
         }
-        topTriangles.push({ i, j, k, shade });
+        curves.push({ points, shade, width, alpha, kind });
       }
 
-      const centerIdx = getVertexIndex({ x: 0, y: 0 }, 0);
+      /**
+       * @param {Point2} point
+       * @param {number} height
+       * @param {number} shade
+       * @param {number} width
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addStem(point, height, shade, width, alpha, kind) {
+        addCurve([to3D(point, 0), to3D(point, height)], shade, width, alpha, kind);
+      }
+
+      /**
+       * @param {Point2} startPoint
+       * @param {Point2} endPoint
+       * @param {number} startHeight
+       * @param {number} endHeight
+       * @param {number} shade
+       * @param {number} width
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addPointedRib(startPoint, endPoint, startHeight, endHeight, shade, width, alpha, kind) {
+        const start = to3D(startPoint, startHeight);
+        const end = to3D(endPoint, endHeight);
+        const control1 = {
+          x: start.x + (end.x - start.x) * 0.05,
+          y: start.y + (end.y - start.y) * 0.42,
+          z: start.z + (end.z - start.z) * 0.05
+        };
+        const control2 = {
+          x: start.x + (end.x - start.x) * 0.62,
+          y: start.y + (end.y - start.y) * 0.94,
+          z: start.z + (end.z - start.z) * 0.62
+        };
+
+        const points = [];
+        const steps = 16;
+        for (let i = 0; i <= steps; i++) {
+          points.push(cubicPoint(start, control1, control2, end, i / steps));
+        }
+        addCurve(points, shade, width, alpha, kind);
+      }
+
+      /**
+       * @returns {{spring:number, crown:number}}
+       */
+      function centralTierHeights() {
+        return {
+          spring: heightBase * 0.34,
+          crown: heightBase * 0.8
+        };
+      }
+
+      /**
+       * @param {number} level
+       * @returns {{spring:number, crown:number}}
+       */
+      function ringHeights(level) {
+        const normalized = level / Math.max(1, maxRingLevel + 1);
+        const roofCrown = heightBase * (0.8 - normalized * 0.08);
+        const roofSpring = heightBase * (0.26 + normalized * 0.04);
+        return {
+          spring: Math.max(heightBase * 0.18, roofSpring - heightBase * 0.08),
+          crown: Math.max(heightBase * 0.42, roofCrown - heightBase * 0.14)
+        };
+      }
+
+      /**
+       * @param {ChapelSegment2D} chapel
+       * @returns {{spring:number, crown:number}}
+       */
+      function chapelHeights(chapel) {
+        const midBottom = lerpPoint2D(chapel.bottom1, chapel.bottom2, 0.5);
+        const midTop = lerpPoint2D(chapel.top1, chapel.top2, 0.5);
+        const protrusionRatio = clamp(distance2D(midBottom, midTop) / Math.max(1, geometry2D.meta.chapelSize), 0, 1.25);
+        const keepLevel = protrusionRatio >= 0.82;
+        const levelDrop = keepLevel ? 0 : chapel.level * 0.055 + (0.82 - protrusionRatio) * 0.2;
+        const roofCrown = heightBase * clamp(0.62 - levelDrop, 0.26, 0.62);
+        const roofSpring = heightBase * clamp(0.24 - (keepLevel ? 0 : chapel.level * 0.015), 0.15, 0.24);
+        return {
+          spring: Math.max(heightBase * 0.12, roofSpring - heightBase * 0.07),
+          crown: Math.max(heightBase * 0.26, roofCrown - heightBase * 0.12)
+        };
+      }
+
+      /**
+       * @param {number} level
+       * @returns {{spring:number, crown:number}}
+       */
+      function terminationHeights(level) {
+        const normalized = level / Math.max(1, maxChapelLevel + 1);
+        const roofCrown = heightBase * (0.4 - normalized * 0.05);
+        const roofSpring = heightBase * 0.16;
+        return {
+          spring: Math.max(heightBase * 0.1, roofSpring - heightBase * 0.03),
+          crown: Math.max(heightBase * 0.2, roofCrown - heightBase * 0.08)
+        };
+      }
+
+      /**
+       * @param {Point2[]} corners
+       * @param {{spring:number, crown:number}} heights
+       * @param {number} shade
+       * @param {string} kind
+       */
+      function addCrossVaultBay(corners, heights, shade, kind) {
+        if (corners.length !== 4) {
+          return;
+        }
+
+        const center = lineIntersection(corners[0], corners[2], corners[1], corners[3]);
+        for (const corner of corners) {
+          addStem(corner, heights.spring, 0.2, 1.05, 0.78, `${kind}-stem`);
+          addPointedRib(corner, center, heights.spring, heights.crown, shade, 1.04, 0.88, `${kind}-rib`);
+        }
+      }
+
+      /**
+       * @param {Point2[]} points
+       * @param {Point2} center
+       * @param {{spring:number, crown:number}} heights
+       * @param {number} shade
+       * @param {string} kind
+       */
+      function addFanBay(points, center, heights, shade, kind) {
+        for (const point of points) {
+          addStem(point, heights.spring, 0.2, 0.92, 0.72, `${kind}-stem`);
+          addPointedRib(point, center, heights.spring, heights.crown, shade, 0.96, 0.84, `${kind}-rib`);
+        }
+      }
+
+      /**
+       * @param {Point2} point
+       * @returns {string}
+       */
+      function pointKey(point) {
+        return `${point.x.toFixed(5)}|${point.y.toFixed(5)}`;
+      }
+
+      /**
+       * @param {Point2[]} points
+       * @param {Point2} point
+       */
+      function appendUniquePoint(points, point) {
+        if (points.length === 0 || pointKey(points[points.length - 1]) !== pointKey(point)) {
+          points.push(point);
+        }
+      }
+
+      /**
+       * @returns {Point2[]}
+       */
+      function buildPerimeterPolyline() {
+        const perimeter = [];
+        const outerRing = geometry2D.rings[0];
+        if (!outerRing || outerRing.outerPoints.length < 2) {
+          return perimeter;
+        }
+
+        /** @type {Map<string, ChapelSegment2D>} */
+        const chapelByBase = new Map();
+        for (const chapel of geometry2D.chapels) {
+          chapelByBase.set(`${pointKey(chapel.bottom1)}>${pointKey(chapel.bottom2)}`, chapel);
+        }
+
+        /** @type {Map<string, Termination2D>} */
+        const terminationByTop = new Map();
+        for (const term of geometry2D.terminations) {
+          terminationByTop.set(`${pointKey(term.p1)}>${pointKey(term.p2)}`, term);
+        }
+
+        appendUniquePoint(perimeter, outerRing.outerPoints[0]);
+
+        for (let i = 0; i < outerRing.outerPoints.length - 1; i++) {
+          let start = outerRing.outerPoints[i];
+          let end = outerRing.outerPoints[i + 1];
+          /** @type {Point2[]} */
+          const leftChain = [];
+          /** @type {Point2[]} */
+          const rightChain = [];
+          /** @type {Termination2D | null} */
+          let termination = null;
+
+          for (let guard = 0; guard < 32; guard++) {
+            const chapel = chapelByBase.get(`${pointKey(start)}>${pointKey(end)}`);
+            if (!chapel) {
+              break;
+            }
+            leftChain.push(chapel.top1);
+            rightChain.push(chapel.top2);
+
+            if (chapel.isTerminal) {
+              termination = terminationByTop.get(`${pointKey(chapel.top1)}>${pointKey(chapel.top2)}`) || null;
+              break;
+            }
+
+            start = chapel.top1;
+            end = chapel.top2;
+          }
+
+          for (const point of leftChain) {
+            appendUniquePoint(perimeter, point);
+          }
+          if (termination) {
+            for (const point of termination.columnPoints) {
+              appendUniquePoint(perimeter, point);
+            }
+          }
+          for (const point of rightChain.slice().reverse()) {
+            appendUniquePoint(perimeter, point);
+          }
+          appendUniquePoint(perimeter, outerRing.outerPoints[i + 1]);
+        }
+
+        return perimeter;
+      }
+
+      const baseRing = geometry2D.rings[0];
+      if (baseRing && baseRing.innerPoints.length >= 2) {
+        addFanBay(baseRing.innerPoints, geometry2D.meta.center, centralTierHeights(), 0.66, 'central');
+      }
 
       for (const ring of geometry2D.rings) {
+        const heights = ringHeights(ring.level);
         for (let i = 0; i < ring.innerPoints.length - 1; i++) {
-          const i0 = getVertexIndex(ring.innerPoints[i], ring.level + 1);
-          const i1 = getVertexIndex(ring.innerPoints[i + 1], ring.level + 1);
-          const o0 = getVertexIndex(ring.outerPoints[i], ring.level + 2);
-          const o1 = getVertexIndex(ring.outerPoints[i + 1], ring.level + 2);
-          const cross = lineIntersection(
-            ring.innerPoints[i],
-            ring.outerPoints[i + 1],
-            ring.outerPoints[i],
-            ring.innerPoints[i + 1]
+          addCrossVaultBay(
+            [ring.innerPoints[i], ring.innerPoints[i + 1], ring.outerPoints[i + 1], ring.outerPoints[i]],
+            heights,
+            0.56 - ring.level * 0.02,
+            `ring-${ring.level}-${i}`
           );
-          const c = getVertexIndex(cross, ring.level + 2);
-
-          addTopTriangle(centerIdx, i0, i1, 0.72 - ring.level * 0.03);
-          addTopTriangle(i0, i1, c, 0.62);
-          addTopTriangle(i1, o1, c, 0.58);
-          addTopTriangle(o1, o0, c, 0.54);
-          addTopTriangle(o0, i0, c, 0.5);
         }
       }
 
       for (const chapel of geometry2D.chapels) {
-        const b1 = getVertexIndex(chapel.bottom1, chapel.level + 2);
-        const b2 = getVertexIndex(chapel.bottom2, chapel.level + 2);
-        const t1 = getVertexIndex(chapel.top1, chapel.level + 3);
-        const t2 = getVertexIndex(chapel.top2, chapel.level + 3);
-        const cross = lineIntersection(chapel.bottom1, chapel.top2, chapel.bottom2, chapel.top1);
-        const c = getVertexIndex(cross, chapel.level + 3);
-
-        addTopTriangle(b1, b2, c, 0.6);
-        addTopTriangle(b2, t2, c, 0.56);
-        addTopTriangle(t2, t1, c, 0.52);
-        addTopTriangle(t1, b1, c, 0.48);
+        const heights = chapelHeights(chapel);
+        addCrossVaultBay(
+          [chapel.bottom1, chapel.bottom2, chapel.top2, chapel.top1],
+          heights,
+          chapel.isTerminal ? 0.52 : 0.48,
+          `chapel-${chapel.level}`
+        );
       }
 
       for (const term of geometry2D.terminations) {
-        const c = getVertexIndex(term.center, term.level + 3);
-        for (let i = 0; i < term.columnPoints.length - 1; i++) {
-          const p = getVertexIndex(term.columnPoints[i], term.level + 4);
-          const q = getVertexIndex(term.columnPoints[i + 1], term.level + 4);
-          addTopTriangle(c, p, q, 0.5);
-        }
+        addFanBay(term.columnPoints, term.center, terminationHeights(term.level), 0.44, `termination-${term.level}`);
       }
 
-      /** @type {Point3[]} */
-      const vertices3D = planVertices.map((v) => {
-        const radialNorm = clamp(Math.hypot(v.x, v.y) / maxRadius, 0, 1);
-        const levelNorm = clamp(v.level / Math.max(1, maxLevel), 0, 1);
-        return {
-          x: v.x,
-          y: cascadeHeightValue(radialNorm, levelNorm, params),
-          z: v.y * params.depthScale
-        };
-      });
-
-      /**
-       * @param {number} i
-       * @param {number} j
-       * @param {number} k
-       * @param {number} shade
-       */
-      function addMeshTriangle(i, j, k, shade) {
-        const a = vertices3D[i];
-        const b = vertices3D[j];
-        const c = vertices3D[k];
-        if (!a || !b || !c) {
-          return;
-        }
-        const area = Math.abs((b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x));
-        if (area < 1e-9) {
-          return;
-        }
-        triangles.push(triangle(a, b, c, shade));
-        wireEdges.push({ a, b });
-        wireEdges.push({ a: b, b: c });
-        wireEdges.push({ a: c, b: a });
-      }
-
-      for (const tri of topTriangles) {
-        addMeshTriangle(tri.i, tri.j, tri.k, tri.shade);
-      }
-
-      /** @type {Map<string, {i:number,j:number,count:number}>} */
-      const edgeUse = new Map();
-      for (const tri of topTriangles) {
-        const edges = [
-          [tri.i, tri.j],
-          [tri.j, tri.k],
-          [tri.k, tri.i]
-        ];
-        for (const edge of edges) {
-          const i = Math.min(edge[0], edge[1]);
-          const j = Math.max(edge[0], edge[1]);
-          const key = `${i}|${j}`;
-          const hit = edgeUse.get(key);
-          if (hit) {
-            hit.count += 1;
-          } else {
-            edgeUse.set(key, { i, j, count: 1 });
-          }
-        }
-      }
-
-      const baseY = -params.heightScale * 1.5;
-      /** @type {Map<number, number>} */
-      const bottomIndexByTop = new Map();
-      function bottomVertexFor(topIdx) {
-        if (bottomIndexByTop.has(topIdx)) {
-          const idx = bottomIndexByTop.get(topIdx);
-          if (idx !== undefined) {
-            return idx;
-          }
-        }
-        const top = vertices3D[topIdx];
-        const idx = vertices3D.length;
-        vertices3D.push({ x: top.x, y: baseY, z: top.z });
-        bottomIndexByTop.set(topIdx, idx);
-        return idx;
-      }
-
-      for (const edge of edgeUse.values()) {
-        if (edge.count !== 1) {
-          continue;
-        }
-        const bi = bottomVertexFor(edge.i);
-        const bj = bottomVertexFor(edge.j);
-        addMeshTriangle(edge.i, edge.j, bj, 0.36);
-        addMeshTriangle(edge.i, bj, bi, 0.32);
+      const perimeterPolyline = buildPerimeterPolyline();
+      if (perimeterPolyline.length >= 2) {
+        addCurve(
+          perimeterPolyline.map((point) => to3D(point, 0)),
+          0.05,
+          2.85,
+          0.98,
+          'perimeter'
+        );
       }
 
       const bounds = {
@@ -1088,14 +1257,14 @@
         maxZ: Number.NEGATIVE_INFINITY
       };
 
-      for (const tri of triangles) {
-        for (const v of [tri.a, tri.b, tri.c]) {
-          bounds.minX = Math.min(bounds.minX, v.x);
-          bounds.maxX = Math.max(bounds.maxX, v.x);
-          bounds.minY = Math.min(bounds.minY, v.y);
-          bounds.maxY = Math.max(bounds.maxY, v.y);
-          bounds.minZ = Math.min(bounds.minZ, v.z);
-          bounds.maxZ = Math.max(bounds.maxZ, v.z);
+      for (const curve of curves) {
+        for (const point of curve.points) {
+          bounds.minX = Math.min(bounds.minX, point.x);
+          bounds.maxX = Math.max(bounds.maxX, point.x);
+          bounds.minY = Math.min(bounds.minY, point.y);
+          bounds.maxY = Math.max(bounds.maxY, point.y);
+          bounds.minZ = Math.min(bounds.minZ, point.z);
+          bounds.maxZ = Math.max(bounds.maxZ, point.z);
         }
       }
 
@@ -1104,7 +1273,7 @@
         bounds.maxX = bounds.maxY = bounds.maxZ = 1;
       }
 
-      return { triangles, wireEdges, bounds };
+      return { curves, bounds };
     }
 
     /**
@@ -1264,38 +1433,6 @@
     }
 
     /**
-     * @param {Point3} a
-     * @param {Point3} b
-     * @param {Point3} c
-     * @returns {Point3}
-     */
-    function normal3(a, b, c) {
-      const ux = b.x - a.x;
-      const uy = b.y - a.y;
-      const uz = b.z - a.z;
-      const vx = c.x - a.x;
-      const vy = c.y - a.y;
-      const vz = c.z - a.z;
-      return {
-        x: uy * vz - uz * vy,
-        y: uz * vx - ux * vz,
-        z: ux * vy - uy * vx
-      };
-    }
-
-    /**
-     * @param {Point3} v
-     * @returns {Point3}
-     */
-    function normalize3(v) {
-      const len = Math.hypot(v.x, v.y, v.z);
-      if (len < 1e-9) {
-        return { x: 0, y: 1, z: 0 };
-      }
-      return { x: v.x / len, y: v.y / len, z: v.z / len };
-    }
-
-    /**
      * @param {Mesh3D} mesh3D
      * @param {CanvasRenderingContext2D} ctx
      * @param {ApseParams} params
@@ -1308,9 +1445,8 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, width, height);
 
-      const orbitY = viewState.baseOrbitY + viewState.orbitYDelta;
-      const yawRad = (orbitY * Math.PI) / 180;
-      const pitchRad = (viewState.orbitX * Math.PI) / 180;
+      const yawRad = (FIXED_ISO_YAW * Math.PI) / 180;
+      const pitchRad = (FIXED_ISO_PITCH * Math.PI) / 180;
       const transformed = [];
       const projectedBounds = {
         minX: Number.POSITIVE_INFINITY,
@@ -1319,28 +1455,27 @@
         maxY: Number.NEGATIVE_INFINITY
       };
 
-      for (const tri of mesh3D.triangles) {
-        const ra = rotateForCamera(tri.a, yawRad, pitchRad);
-        const rb = rotateForCamera(tri.b, yawRad, pitchRad);
-        const rc = rotateForCamera(tri.c, yawRad, pitchRad);
-        const a = { x: ra.x, y: -ra.y, z: ra.z };
-        const b = { x: rb.x, y: -rb.y, z: rb.z };
-        const c = { x: rc.x, y: -rc.y, z: rc.z };
+      for (const curve of mesh3D.curves) {
+        const points = curve.points.map((point) => {
+          const rotated = rotateForCamera(point, yawRad, pitchRad);
+          return { x: rotated.x, y: -rotated.y, z: rotated.z };
+        });
 
-        projectedBounds.minX = Math.min(projectedBounds.minX, a.x, b.x, c.x);
-        projectedBounds.maxX = Math.max(projectedBounds.maxX, a.x, b.x, c.x);
-        projectedBounds.minY = Math.min(projectedBounds.minY, a.y, b.y, c.y);
-        projectedBounds.maxY = Math.max(projectedBounds.maxY, a.y, b.y, c.y);
+        for (const point of points) {
+          projectedBounds.minX = Math.min(projectedBounds.minX, point.x);
+          projectedBounds.maxX = Math.max(projectedBounds.maxX, point.x);
+          projectedBounds.minY = Math.min(projectedBounds.minY, point.y);
+          projectedBounds.maxY = Math.max(projectedBounds.maxY, point.y);
+        }
 
+        const depth = points.reduce((sum, point) => sum + point.z, 0) / Math.max(1, points.length);
         transformed.push({
-          a,
-          b,
-          c,
-          ra,
-          rb,
-          rc,
-          baseShade: tri.shade,
-          depth: (a.z + b.z + c.z) / 3
+          points,
+          shade: curve.shade,
+          width: curve.width,
+          alpha: curve.alpha,
+          kind: curve.kind,
+          depth
         });
       }
 
@@ -1358,25 +1493,27 @@
       const tx = width / 2 - midX * scale + viewState.panX;
       const ty = height / 2 - midY * scale + viewState.panY;
 
-      transformed.sort((m, n) => m.depth - n.depth);
+      transformed.sort((m, n) => {
+        const perimeterDelta = Number(m.kind === 'perimeter') - Number(n.kind === 'perimeter');
+        if (perimeterDelta !== 0) {
+          return perimeterDelta;
+        }
+        return m.depth - n.depth;
+      });
 
-      const lightDir = normalize3({ x: 0.35, y: 0.84, z: 0.42 });
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-      for (const tri of transformed) {
-        const n = normalize3(normal3(tri.ra, tri.rb, tri.rc));
-        const lambert = clamp((n.x * lightDir.x + n.y * lightDir.y + n.z * lightDir.z + 1) / 2, 0, 1);
-        const brightness = clamp(0.24 + lambert * 0.55 + tri.baseShade * 0.2, 0, 1);
-        const gray = Math.round(28 + brightness * 180);
-
+      for (const curve of transformed) {
+        const gray = Math.round(18 + clamp(curve.shade, 0, 1) * 92);
+        const widthPx = clamp(curve.width * Math.max(0.7, scale * 0.01), 0.9, 3.4);
         ctx.beginPath();
-        ctx.moveTo(tri.a.x * scale + tx, tri.a.y * scale + ty);
-        ctx.lineTo(tri.b.x * scale + tx, tri.b.y * scale + ty);
-        ctx.lineTo(tri.c.x * scale + tx, tri.c.y * scale + ty);
-        ctx.closePath();
-        ctx.fillStyle = `rgba(${gray}, ${gray}, ${gray}, 0.92)`;
-        ctx.fill();
-        ctx.strokeStyle = '#151515';
-        ctx.lineWidth = 0.9;
+        ctx.moveTo(curve.points[0].x * scale + tx, curve.points[0].y * scale + ty);
+        for (let i = 1; i < curve.points.length; i++) {
+          ctx.lineTo(curve.points[i].x * scale + tx, curve.points[i].y * scale + ty);
+        }
+        ctx.strokeStyle = `rgba(${gray}, ${gray}, ${gray}, ${clamp(curve.alpha, 0.42, 0.96)})`;
+        ctx.lineWidth = widthPx;
         ctx.stroke();
       }
     }
@@ -1394,9 +1531,47 @@
         wallThickness: parseInt(controls.wallThickness.value, 10),
         heightScale: parseInt(controls.heightScale.value, 10),
         depthScale: parseInt(controls.depthScale.value, 10) / 100,
-        rotationY: parseInt(controls.rotationY.value, 10),
         seed: (parseInt(controls.seed.value, 10) >>> 0) || 0
       };
+    }
+
+    /**
+     * @param {Partial<ApseParams>} params
+     */
+    function setControlsFromParams(params) {
+      if (typeof params.edges === 'number') {
+        controls.edges.value = String(params.edges);
+      }
+      if (Array.isArray(params.sequence)) {
+        controls.sequence.value = params.sequence.join(',');
+      }
+      if (typeof params.apseSize === 'number') {
+        controls.apseSize.value = String(params.apseSize);
+      }
+      if (typeof params.apseRatio === 'number') {
+        controls.apseRatio.value = String(Math.round(params.apseRatio * 100));
+      }
+      if (typeof params.divisionThreshold === 'number') {
+        controls.divisionThreshold.value = String(params.divisionThreshold);
+      }
+      if (typeof params.columnSize === 'number') {
+        controls.columnSize.value = String(Math.round(params.columnSize * 100));
+      }
+      if (typeof params.chapelScale === 'number') {
+        controls.chapelScale.value = String(Math.round(params.chapelScale * 100));
+      }
+      if (typeof params.wallThickness === 'number') {
+        controls.wallThickness.value = String(Math.round(params.wallThickness));
+      }
+      if (typeof params.heightScale === 'number') {
+        controls.heightScale.value = String(Math.round(params.heightScale));
+      }
+      if (typeof params.depthScale === 'number') {
+        controls.depthScale.value = String(Math.round(params.depthScale * 100));
+      }
+      if (typeof params.seed === 'number') {
+        controls.seed.value = String(params.seed >>> 0);
+      }
     }
 
     /**
@@ -1413,31 +1588,28 @@
       labels.wallThickness.textContent = String(params.wallThickness);
       labels.heightScale.textContent = String(params.heightScale);
       labels.depthScale.textContent = params.depthScale.toFixed(2);
-      labels.rotationY.textContent = `${Math.round(viewState.baseOrbitY + viewState.orbitYDelta)}°`;
       labels.seed.textContent = String(params.seed >>> 0);
     }
 
     function redraw() {
       const params = readParams();
-      viewState.baseOrbitY = params.rotationY;
       syncLabels(params);
       const geometry2D = generate2DGeometry(params);
-      const mesh3D = build3DTriangles(geometry2D, params);
+      const mesh3D = build3DRibNetwork(geometry2D, params);
       render2D(geometry2D, planCtx, params);
       render3D(mesh3D, view3dCtx, params);
     }
 
-    function applyRandomizedParams() {
+    function applySeedParams() {
       const params = readParams();
       const randomized = seededRandomize(params.seed, params);
-
-      controls.edges.value = String(randomized.edges);
-      controls.sequence.value = randomized.sequence.join(',');
-      controls.apseSize.value = String(randomized.apseSize);
-      controls.apseRatio.value = String(Math.round(randomized.apseRatio * 100));
-      controls.divisionThreshold.value = String(randomized.divisionThreshold);
-
+      setControlsFromParams(randomized);
       redraw();
+    }
+
+    function applyRandomizedParams() {
+      controls.seed.value = String(randomUint32());
+      applySeedParams();
     }
 
     function exportViews() {
@@ -1463,8 +1635,6 @@
     }
 
     function resetView3D() {
-      viewState.orbitYDelta = 0;
-      viewState.orbitX = 35;
       viewState.panX = 0;
       viewState.panY = 0;
       viewState.zoom = 1;
@@ -1478,7 +1648,6 @@
       pointerState.pointerId = event.pointerId;
       pointerState.lastX = event.clientX;
       pointerState.lastY = event.clientY;
-      pointerState.mode = event.button === 2 || event.shiftKey ? 'pan' : 'rotate';
       view3dCanvas.setPointerCapture(event.pointerId);
     }
 
@@ -1495,14 +1664,8 @@
       pointerState.lastX = event.clientX;
       pointerState.lastY = event.clientY;
 
-      if (pointerState.mode === 'pan') {
-        viewState.panX += dx;
-        viewState.panY += dy;
-      } else {
-        viewState.orbitYDelta += dx * 0.42;
-        viewState.orbitX = clamp(viewState.orbitX + dy * 0.24, 12, 82);
-      }
-
+      viewState.panX += dx;
+      viewState.panY += dy;
       redraw();
     }
 
@@ -1519,6 +1682,11 @@
     }
 
     controls.randomizeButton.addEventListener('click', applyRandomizedParams);
+    controls.applySeedButton.addEventListener('click', applySeedParams);
+    controls.resetViewButton.addEventListener('click', () => {
+      resetView3D();
+      redraw();
+    });
     controls.exportButton.addEventListener('click', exportViews);
 
     const liveUpdateInputs = [
@@ -1539,15 +1707,6 @@
       el.addEventListener('input', redraw);
       el.addEventListener('change', redraw);
     }
-
-    controls.rotationY.addEventListener('input', () => {
-      viewState.orbitYDelta = 0;
-      redraw();
-    });
-    controls.rotationY.addEventListener('change', () => {
-      viewState.orbitYDelta = 0;
-      redraw();
-    });
 
     view3dCanvas.addEventListener('contextmenu', (event) => {
       event.preventDefault();
