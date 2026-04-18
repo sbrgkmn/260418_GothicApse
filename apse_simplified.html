@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simplified Apse Generator</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .info-text {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label for="edges">Number of edges: </label>
+        <input type="range" id="edges" min="3" max="11" step="2" value="7">
+        <span id="edgeValue">7</span>
+        
+        <br><br>
+        <label for="sequence">Sequence (comma-separated numbers): </label>
+        <input type="text" id="sequence" value="1,1,1,2,3">
+        <button id="randomizeButton" style="margin-left: 10px; padding: 2px 8px;">Randomize</button>
+        
+        <br><br>
+        <label for="apseSize">Apse Size: </label>
+        <input type="range" id="apseSize" min="100" max="500" value="250">
+        <span id="apseSizeValue">250</span>
+        
+        <br><br>
+        <label for="apseRatio">Ambulatory/Chapel Ratio: </label>
+        <input type="range" id="apseRatio" min="10" max="90" value="60">
+        <span id="apseRatioValue">0.60</span>
+        <span> (ambulatory:chapel)</span>
+        
+        <br><br>
+        <label for="divisionThreshold">Division Threshold: </label>
+        <input type="range" id="divisionThreshold" min="10" max="150" value="80">
+        <span id="divisionThresholdValue">80</span>
+        
+        <br><br>
+        <label for="columnSize">Column Size: </label>
+        <input type="range" id="columnSize" min="5" max="100" value="50">
+        <span id="columnSizeValue">0.5</span>
+        
+        <br><br>
+        <label for="chapelScale">Chapel scale factor: </label>
+        <input type="range" id="chapelScale" min="50" max="95" value="80">
+        <span id="chapelScaleValue">0.80</span>
+
+        <br><br>
+        <label for="wallThickness">Wall thickness: </label>
+        <input type="range" id="wallThickness" min="2" max="20" value="10">
+        <span id="wallThicknessValue">10</span>
+
+        <br><br>
+        <button id="exportButton" style="padding: 8px 16px; margin-top: 10px;">Export Image</button>
+        <div class="info-text">Files will be saved to your downloads folder. Suggested destination: <br>/Users/sabrigokmen/Desktop/DECK/2025/GenAI research/towers/tower_exports</div>
+    </div>
+    <canvas id="canvas" width="1600" height="1200"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const slider = document.getElementById('edges');
+        const edgeValue = document.getElementById('edgeValue');
+        const sequenceInput = document.getElementById('sequence');
+        const apseSizeSlider = document.getElementById('apseSize');
+        const apseSizeValue = document.getElementById('apseSizeValue');
+        const apseRatioSlider = document.getElementById('apseRatio');
+        const apseRatioValue = document.getElementById('apseRatioValue');
+        const divisionThresholdSlider = document.getElementById('divisionThreshold');
+        const divisionThresholdValue = document.getElementById('divisionThresholdValue');
+        const columnSizeSlider = document.getElementById('columnSize');
+        const columnSizeValue = document.getElementById('columnSizeValue');
+        const chapelScaleSlider = document.getElementById('chapelScale');
+        const chapelScaleValue = document.getElementById('chapelScaleValue');
+        const wallThicknessSlider = document.getElementById('wallThickness');
+        const wallThicknessValue = document.getElementById('wallThicknessValue');
+        const exportButton = document.getElementById('exportButton');
+        const randomizeButton = document.getElementById('randomizeButton');
+
+        // Utility functions
+        function getPointOnArc(centerX, centerY, radius, startAngle, endAngle, ratio) {
+            const angle = startAngle + (endAngle - startAngle) * ratio;
+            return {
+                x: centerX + radius * Math.cos(angle),
+                y: centerY + radius * Math.sin(angle)
+            };
+        }
+
+        function getPointOnLine(p1, p2, ratio) {
+            return {
+                x: p1.x + (p2.x - p1.x) * ratio,
+                y: p1.y + (p2.y - p1.y) * ratio
+            };
+        }
+
+        // Function to generate points for a ring segment
+        function generateRingPoints(centerX, centerY, innerRadius, outerRadius, sides, rotation = 0, segmentCount = 1) {
+            const innerPoints = [];
+            const outerPoints = [];
+            
+            // Calculate vertex points for both inner and outer ring
+            for (let i = 0; i <= sides; i++) {
+                const angle = rotation + (i * Math.PI / sides);
+                
+                // Inner point
+                const innerX = centerX + innerRadius * Math.cos(angle);
+                const innerY = centerY + innerRadius * Math.sin(angle);
+                innerPoints.push({x: innerX, y: innerY, angle, radius: innerRadius});
+                
+                // Outer point
+                const outerX = centerX + outerRadius * Math.cos(angle);
+                const outerY = centerY + outerRadius * Math.sin(angle);
+                outerPoints.push({x: outerX, y: outerY, angle, radius: outerRadius});
+            }
+            
+            return { innerPoints, outerPoints };
+        }
+
+        // Function to draw columns
+        function drawColumn(x, y, size) {
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Function to draw connections between inner and outer rings
+        function drawConnections(innerPoints, outerPoints, centerX, centerY, sequence, divisionIdx = 0) {
+            const segmentCount = sequence[divisionIdx] || 1;
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+            
+            // Draw radial lines connecting to center
+            for (let i = 0; i < innerPoints.length; i++) {
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(innerPoints[i].x, innerPoints[i].y);
+            }
+            ctx.stroke();
+            
+            // Draw inner and outer arcs
+            ctx.beginPath();
+            for (let i = 0; i < innerPoints.length - 1; i++) {
+                ctx.moveTo(innerPoints[i].x, innerPoints[i].y);
+                ctx.lineTo(innerPoints[i+1].x, innerPoints[i+1].y);
+                
+                ctx.moveTo(outerPoints[i].x, outerPoints[i].y);
+                ctx.lineTo(outerPoints[i+1].x, outerPoints[i+1].y);
+            }
+            ctx.stroke();
+            
+            // Draw connecting lines between rings
+            ctx.beginPath();
+            for (let i = 0; i < innerPoints.length; i++) {
+                ctx.moveTo(innerPoints[i].x, innerPoints[i].y);
+                ctx.lineTo(outerPoints[i].x, outerPoints[i].y);
+            }
+            ctx.stroke();
+            
+            // Draw triangulation
+            ctx.beginPath();
+            for (let i = 0; i < innerPoints.length - 1; i++) {
+                ctx.moveTo(innerPoints[i].x, innerPoints[i].y);
+                ctx.lineTo(outerPoints[i+1].x, outerPoints[i+1].y);
+                
+                ctx.moveTo(outerPoints[i].x, outerPoints[i].y);
+                ctx.lineTo(innerPoints[i+1].x, innerPoints[i+1].y);
+            }
+            ctx.stroke();
+            
+            // Calculate column size based on arc length
+            const sizeFactor = parseFloat(columnSizeSlider.value) / 100;
+            const sides = innerPoints.length - 1;
+            const arcLength = (Math.PI / sides) * innerPoints[0].radius;
+            const columnSize = arcLength * sizeFactor * 0.3;
+            
+            // Draw columns at points
+            for (const point of innerPoints) {
+                drawColumn(point.x, point.y, columnSize);
+            }
+            
+            for (const point of outerPoints) {
+                drawColumn(point.x, point.y, columnSize);
+            }
+        }
+
+        // Function to recursively subdivide the ambulatory
+        function subdivideAmbulatory(centerX, centerY, innerRadius, outerRadius, sides, divisionThreshold, sequence, divisionIdx = 0) {
+            // Generate points for this ring
+            const rings = generateRingPoints(centerX, centerY, innerRadius, outerRadius, sides, Math.PI);
+            
+            // Draw connections for this ring
+            drawConnections(rings.innerPoints, rings.outerPoints, centerX, centerY, sequence, divisionIdx);
+            
+            // Check if further subdivision is needed based on the ring width
+            const ringWidth = outerRadius - innerRadius;
+            if (ringWidth > divisionThreshold && divisionIdx < sequence.length - 1) {
+                // Calculate next inner radius based on the segment count for this division
+                const segmentCount = sequence[divisionIdx] || 1;
+                const segmentRatio = 1 / (segmentCount + 1);
+                const nextInnerRadius = outerRadius - ringWidth * segmentRatio;
+                
+                // Recursively subdivide from boundary inward
+                subdivideAmbulatory(
+                    centerX, 
+                    centerY, 
+                    nextInnerRadius, 
+                    outerRadius, 
+                    sides, 
+                    divisionThreshold, 
+                    sequence, 
+                    divisionIdx + 1
+                );
+            }
+            
+            return rings;
+        }
+
+        // Function to draw chapel with recursive subdivision if needed
+        function drawChapel(p1, p2, chapelLength, centerX, centerY, divisionThreshold, sequence, divisionIdx = 0) {
+            // Calculate the midpoint of the edge
+            const midPoint = {
+                x: (p1.x + p2.x) / 2,
+                y: (p1.y + p2.y) / 2
+            };
+            
+            // Calculate the perpendicular vector
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            
+            // Calculate normal vector (perpendicular to edge)
+            let normalX = -dy / length;
+            let normalY = dx / length;
+            
+            // Calculate vector from center to midpoint
+            const toCenterX = midPoint.x - centerX;
+            const toCenterY = midPoint.y - centerY;
+            
+            // Ensure normal points outward by comparing with vector to center
+            const dotProduct = normalX * toCenterX + normalY * toCenterY;
+            if (dotProduct < 0) {
+                normalX = -normalX;
+                normalY = -normalY;
+            }
+            
+            // Define the chapel width (edge length)
+            const chapelWidth = length;
+            
+            // Calculate the scale for the new edge
+            const scale = parseFloat(chapelScaleSlider.value) / 100;
+            
+            // Check if we need to subdivide the chapel
+            const segmentToSubdivide = chapelLength > divisionThreshold && divisionIdx < sequence.length - 1;
+            const segmentCount = sequence[divisionIdx] || 1;
+            
+            // Calculate the full chapel points before subdivision
+            // First calculate the full chapel length position
+            const fullOffsetMid = {
+                x: midPoint.x + normalX * chapelLength,
+                y: midPoint.y + normalY * chapelLength
+            };
+            
+            // Calculate the top edge endpoints
+            const fullTop1 = {
+                x: fullOffsetMid.x + (p1.x - midPoint.x) * scale,
+                y: fullOffsetMid.y + (p1.y - midPoint.y) * scale
+            };
+            
+            const fullTop2 = {
+                x: fullOffsetMid.x + (p2.x - midPoint.x) * scale,
+                y: fullOffsetMid.y + (p2.y - midPoint.y) * scale
+            };
+            
+            // If we don't need to subdivide, draw the complete chapel
+            if (!segmentToSubdivide) {
+                drawChapelSegment(p1, p2, fullTop1, fullTop2, centerX, centerY, true);
+                return;
+            }
+            
+            // If we need to subdivide, calculate the subdivision point
+            const subdivisionRatio = 1 / (segmentCount + 1);
+            const currentSegmentLength = chapelLength * subdivisionRatio;
+            const remainingLength = chapelLength - currentSegmentLength;
+            
+            // Calculate the current segment's offset position
+            const currentOffsetMid = {
+                x: midPoint.x + normalX * currentSegmentLength,
+                y: midPoint.y + normalY * currentSegmentLength
+            };
+            
+            // Calculate the current segment's top edge endpoints
+            const currentTop1 = {
+                x: currentOffsetMid.x + (p1.x - midPoint.x) * scale,
+                y: currentOffsetMid.y + (p1.y - midPoint.y) * scale
+            };
+            
+            const currentTop2 = {
+                x: currentOffsetMid.x + (p2.x - midPoint.x) * scale,
+                y: currentOffsetMid.y + (p2.y - midPoint.y) * scale
+            };
+            
+            // Draw the current segment of the chapel
+            drawChapelSegment(p1, p2, currentTop1, currentTop2, centerX, centerY, false);
+            
+            // Recursively draw the next segment
+            drawChapel(currentTop1, currentTop2, remainingLength, centerX, centerY, divisionThreshold, sequence, divisionIdx + 1);
+        }
+        
+        // Function to draw a segment of the chapel
+        function drawChapelSegment(bottom1, bottom2, top1, top2, centerX, centerY, isTerminal) {
+            // Define edge thickness for the outer edges from slider
+            const edgeThickness = parseInt(wallThicknessSlider.value);
+            
+            // Draw thick edges for the side connections
+            function drawThickEdge(start, end) {
+                const edgeDx = end.x - start.x;
+                const edgeDy = end.y - start.y;
+                const edgeLength = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+                
+                // Calculate perpendicular direction for thickness
+                const perpX = -edgeDy / edgeLength;
+                const perpY = edgeDx / edgeLength;
+                
+                // Four corners of the thick edge
+                const p1 = {
+                    x: start.x + perpX * edgeThickness/2,
+                    y: start.y + perpY * edgeThickness/2
+                };
+                
+                const p2 = {
+                    x: start.x - perpX * edgeThickness/2,
+                    y: start.y - perpY * edgeThickness/2
+                };
+                
+                const p3 = {
+                    x: end.x - perpX * edgeThickness/2,
+                    y: end.y - perpY * edgeThickness/2
+                };
+                
+                const p4 = {
+                    x: end.x + perpX * edgeThickness/2,
+                    y: end.y + perpY * edgeThickness/2
+                };
+                
+                // Draw filled thick edge
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.lineTo(p3.x, p3.y);
+                ctx.lineTo(p4.x, p4.y);
+                ctx.closePath();
+                ctx.fillStyle = '#000';
+                ctx.fill();
+            }
+            
+            // Draw thick black edges for the side connections
+            drawThickEdge(bottom1, top1);      // Left edge
+            drawThickEdge(bottom2, top2);      // Right edge
+            
+            // Draw light edges for the horizontal edges
+            ctx.beginPath();
+            ctx.strokeStyle = '#666';          // Light gray color
+            ctx.lineWidth = 1.5;               // Thin line
+            ctx.moveTo(bottom1.x, bottom1.y);
+            ctx.lineTo(bottom2.x, bottom2.y);  // Bottom edge
+            ctx.moveTo(top1.x, top1.y);
+            ctx.lineTo(top2.x, top2.y);        // Top edge
+            ctx.stroke();
+            
+            // Draw cross connections with thin lines
+            ctx.beginPath();
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(bottom1.x, bottom1.y);
+            ctx.lineTo(top2.x, top2.y);
+            ctx.moveTo(bottom2.x, bottom2.y);
+            ctx.lineTo(top1.x, top1.y);
+            ctx.stroke();
+            
+            // Draw columns at the vertices
+            const sizeFactor = parseFloat(columnSizeSlider.value) / 100;
+            const bottomEdgeLength = Math.sqrt(Math.pow(bottom2.x - bottom1.x, 2) + Math.pow(bottom2.y - bottom1.y, 2));
+            const topEdgeLength = Math.sqrt(Math.pow(top2.x - top1.x, 2) + Math.pow(top2.y - top1.y, 2));
+            const circleRadius = bottomEdgeLength * sizeFactor * 0.15;
+            const topCircleRadius = topEdgeLength * sizeFactor * 0.15;
+            
+            ctx.fillStyle = '#000';
+            
+            // Draw circles at bottom vertices
+            ctx.beginPath();
+            ctx.arc(bottom1.x, bottom1.y, circleRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(bottom2.x, bottom2.y, circleRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw circles at top vertices
+            ctx.beginPath();
+            ctx.arc(top1.x, top1.y, topCircleRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(top2.x, top2.y, topCircleRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // If this is the terminal segment, add a semicircular cap
+            if (isTerminal) {
+                drawApseTermination(top1, top2, centerX, centerY);
+            }
+        }
+
+        // Function to draw the semicircular apse termination
+        function drawApseTermination(p1, p2, centerX, centerY) {
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            
+            // Calculate the midpoint of the edge (center of our arc)
+            const capMidPoint = {
+                x: (p1.x + p2.x) / 2,
+                y: (p1.y + p2.y) / 2
+            };
+            
+            // Calculate the radius for the semicircle (half the edge length)
+            const radius = length / 2;
+            
+            // Calculate the angle of the edge
+            const angle = Math.atan2(dy, dx);
+            
+            // Calculate start and end angles for the semicircle
+            const startAngle = angle + Math.PI; // Start from the opposite direction of the edge
+            const endAngle = angle + 2 * Math.PI; // Complete 180 degrees
+            
+            // Get wall thickness from slider
+            const edgeThickness = parseInt(wallThicknessSlider.value);
+            
+            // Draw outer arc (thicker black line)
+            ctx.beginPath();
+            ctx.fillStyle = '#000';
+            
+            // Draw the filled shape between inner and outer arcs
+            const outerRadius = radius + edgeThickness/2;
+            const innerRadius = radius - edgeThickness/2;
+            
+            // Start at the beginning of the outer arc
+            ctx.arc(capMidPoint.x, capMidPoint.y, outerRadius, startAngle, endAngle);
+            
+            // Draw line to the inner arc's end
+            ctx.lineTo(capMidPoint.x + innerRadius * Math.cos(endAngle), 
+                    capMidPoint.y + innerRadius * Math.sin(endAngle));
+            
+            // Draw the inner arc in reverse
+            ctx.arc(capMidPoint.x, capMidPoint.y, innerRadius, endAngle, startAngle, true);
+            
+            // Close the path
+            ctx.closePath();
+            ctx.fill();
+            
+            // Add connecting lines and columns along the semicircle
+            const numColumns = 5;
+            
+            // Draw connecting lines first
+            ctx.beginPath();
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+            
+            // Store column points and their angles for later use
+            const columnPoints = [];
+            for (let i = 0; i < numColumns; i++) {
+                const columnAngle = startAngle + (i / (numColumns - 1)) * (endAngle - startAngle);
+                const columnX = capMidPoint.x + radius * Math.cos(columnAngle);
+                const columnY = capMidPoint.y + radius * Math.sin(columnAngle);
+                
+                // Store points for drawing circles later
+                columnPoints.push({ x: columnX, y: columnY });
+                
+                // Draw connecting line to arc center
+                ctx.moveTo(columnX, columnY);
+                ctx.lineTo(capMidPoint.x, capMidPoint.y);
+            }
+            ctx.stroke();
+
+            // Draw circles at each point along the semicircle
+            const sizeFactor = parseFloat(columnSizeSlider.value) / 100;
+            const arcLength = 2 * radius * Math.PI / 2; // Half-circle arc length
+            const vertexSpacing = arcLength / (numColumns - 1);
+            const circleRadius = vertexSpacing * sizeFactor * 0.3;
+            
+            for (const point of columnPoints) {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, circleRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Function to draw boundary around the outermost edges
+        function drawBoundary(points, thickness) {
+            const boundaryThickness = thickness;
+            
+            // Draw the boundary for each segment of the final polygon arc
+            for (let i = 0; i < points.length - 1; i++) {
+                const p1 = points[i];
+                const p2 = points[i+1];
+                
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                
+                // Calculate perpendicular direction for thickness
+                const perpX = -dy / length;
+                const perpY = dx / length;
+                
+                // Four corners of the thick edge
+                const corner1 = {
+                    x: p1.x + perpX * boundaryThickness/2,
+                    y: p1.y + perpY * boundaryThickness/2
+                };
+                
+                const corner2 = {
+                    x: p1.x - perpX * boundaryThickness/2,
+                    y: p1.y - perpY * boundaryThickness/2
+                };
+                
+                const corner3 = {
+                    x: p2.x - perpX * boundaryThickness/2,
+                    y: p2.y - perpY * boundaryThickness/2
+                };
+                
+                const corner4 = {
+                    x: p2.x + perpX * boundaryThickness/2,
+                    y: p2.y + perpY * boundaryThickness/2
+                };
+                
+                // Draw filled thick edge
+                ctx.beginPath();
+                ctx.moveTo(corner1.x, corner1.y);
+                ctx.lineTo(corner2.x, corner2.y);
+                ctx.lineTo(corner3.x, corner3.y);
+                ctx.lineTo(corner4.x, corner4.y);
+                ctx.closePath();
+                ctx.fillStyle = '#000';
+                ctx.fill();
+            }
+        }
+
+        // Main function to draw the apse using size and ratio parameters
+        function drawApse(centerX, centerY, apseSize, ambulatoryRatio, sides, sequence, divisionThreshold) {
+            // Calculate sizes with the ambulatory/chapel ratio
+            const ambulatorySize = apseSize * ambulatoryRatio;  // Size of ambulatory
+            const chapelSize = apseSize * (1 - ambulatoryRatio); // Size allocated for chapels
+            
+            // Calculate inner radius of ambulatory (approximately 60% of ambulatory size)
+            const innerRadius = ambulatorySize * 0.6;
+            
+            // Recursively subdivide the ambulatory based on division threshold
+            // Start from the outer boundary and move inward
+            const rings = subdivideAmbulatory(
+                centerX, 
+                centerY, 
+                innerRadius, 
+                ambulatorySize, 
+                sides, 
+                divisionThreshold, 
+                sequence
+            );
+            
+            // Draw chapels on the outer ring with recursive subdivision
+            for (let i = 0; i < rings.outerPoints.length - 1; i++) {
+                const p1 = rings.outerPoints[i];
+                const p2 = rings.outerPoints[i + 1];
+                
+                drawChapel(p1, p2, chapelSize, centerX, centerY, divisionThreshold, sequence);
+            }
+        }
+
+        // Main drawing function
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const sides = parseInt(slider.value);
+            const apseSize = parseInt(apseSizeSlider.value);
+            const ambulatoryRatio = parseFloat(apseRatioSlider.value) / 100;
+            const divisionThreshold = parseInt(divisionThresholdSlider.value);
+            const sequence = sequenceInput.value.split(',').map(n => parseInt(n.trim()));
+            
+            const centerX = canvas.width/2;
+            const centerY = canvas.height-50;
+            
+            drawApse(centerX, centerY, apseSize, ambulatoryRatio, sides, sequence, divisionThreshold);
+        }
+
+        // Event listeners
+        slider.addEventListener('input', (e) => {
+            edgeValue.textContent = e.target.value;
+            draw();
+        });
+
+        sequenceInput.addEventListener('input', () => {
+            draw();
+        });
+
+        apseSizeSlider.addEventListener('input', (e) => {
+            apseSizeValue.textContent = e.target.value;
+            draw();
+        });
+
+        apseRatioSlider.addEventListener('input', (e) => {
+            apseRatioValue.textContent = (e.target.value / 100).toFixed(2);
+            draw();
+        });
+        
+        divisionThresholdSlider.addEventListener('input', (e) => {
+            divisionThresholdValue.textContent = e.target.value;
+            draw();
+        });
+
+        columnSizeSlider.addEventListener('input', (e) => {
+            columnSizeValue.textContent = (e.target.value / 100).toFixed(2);
+            draw();
+        });
+
+        chapelScaleSlider.addEventListener('input', (e) => {
+            chapelScaleValue.textContent = (e.target.value / 100).toFixed(2);
+            draw();
+        });
+
+        wallThicknessSlider.addEventListener('input', (e) => {
+            wallThicknessValue.textContent = e.target.value;
+            draw();
+        });
+
+        // Randomize button functionality
+        randomizeButton.addEventListener('click', () => {
+            // Randomize number of edges (3-11)
+            const randomEdges = Math.floor(Math.random() * 5) * 2 + 3;  // Odd numbers: 3, 5, 7, 9, 11
+            slider.value = randomEdges;
+            edgeValue.textContent = randomEdges;
+            
+            // Randomize sequence with weights favoring lower numbers
+            const sequenceLength = 5;  // Fixed length for the sequence
+            const randomSequence = [];
+            
+            for (let i = 0; i < sequenceLength; i++) {
+                // Higher probability for lower numbers
+                const positionRatio = i / (sequenceLength - 1);
+                
+                // Weights for numbers 1-4
+                let weights = [
+                    0.7 - (0.4 * positionRatio),
+                    0.2 + (0.1 * positionRatio),
+                    0.08 + (0.2 * positionRatio),
+                    0.02 + (0.1 * positionRatio)
+                ];
+                
+                // Normalize weights
+                const weightSum = weights.reduce((a, b) => a + b, 0);
+                weights = weights.map(w => w / weightSum);
+                
+                // Cumulative distribution
+                const cumulativeWeights = [];
+                let cumulative = 0;
+                for (const weight of weights) {
+                    cumulative += weight;
+                    cumulativeWeights.push(cumulative);
+                }
+                
+                // Random selection
+                const random = Math.random();
+                let selectedNumber = 1;
+                
+                for (let j = 0; j < cumulativeWeights.length; j++) {
+                    if (random <= cumulativeWeights[j]) {
+                        selectedNumber = j + 1;
+                        break;
+                    }
+                }
+                
+                randomSequence.push(selectedNumber);
+            }
+            
+            sequenceInput.value = randomSequence.join(',');
+            
+            // Randomize size, ratio, and division threshold
+            apseSizeSlider.value = Math.floor(Math.random() * 300) + 150;  // 150-450
+            apseSizeValue.textContent = apseSizeSlider.value;
+            
+            apseRatioSlider.value = Math.floor(Math.random() * 50) + 30;  // 30-80%
+            apseRatioValue.textContent = (apseRatioSlider.value / 100).toFixed(2);
+            
+            divisionThresholdSlider.value = Math.floor(Math.random() * 90) + 30;  // 30-120
+            divisionThresholdValue.textContent = divisionThresholdSlider.value;
+            
+            draw();
+        });
+
+        // Export functionality
+        exportButton.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            
+            // Generate a filename with timestamp
+            const now = new Date();
+            const timestamp = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}-${now.getMinutes().toString().padStart(2,'0')}-${now.getSeconds().toString().padStart(2,'0')}`;
+            
+            // Generate filename
+            link.download = `apse-design_${timestamp}.png`;
+            link.click();
+        });
+
+        // Initial draw
+        draw();
+    </script>
+</body>
+</html> 

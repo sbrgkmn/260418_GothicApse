@@ -1,0 +1,69 @@
+Gothic Apse
+
+Purpose
+Build an app that generates recursive Gothic apse forms using parametric rules derived from Jean Bony’s three-tier system.
+
+Core Idea
+- Generate apses from rules, not fixed geometry
+- Maintain alignment between plan, elevation, and 3D
+- Support recursion and variation within a coherent system
+
+Inputs
+- 5 apse types (each with plan, elevation, 3D)
+- Each type should define:
+  - proportions
+  - tier relationships
+  - basic geometric rules
+
+What Codex Should Do
+- Start simple, then expand
+- Build one working apse generator first
+- Then generalize to all 5 types
+- Keep logic modular and readable
+- Prefer reusable rules over hardcoded geometry
+
+Minimal Architecture
+- data/ → apse datasets
+- lib/ → generation logic (recursion + params)
+- components/ → UI
+- types/ → schemas
+
+Rules (Keep Loose)
+- Use rule-based geometry, not image imitation
+- Preserve plan ↔ elevation ↔ 3D relationships
+- Recursion should be structured, not random
+- Avoid overfitting to one precedent
+- Keep system extendable
+
+Interface (Simple)
+- Select apse type
+- Adjust parameters
+- Control recursion depth
+- Toggle plan / elevation / 3D
+
+Success Criteria
+- Generates coherent apses from rules
+- Outputs stay consistent across representations
+- System is understandable and adjustable
+
+Repository + Workflow Constraints
+- Repo name: gothic-apse
+- Document title must match repo name
+- Do NOT push to GitHub unless instructed
+- Do NOT pull unless instructed
+- Use account: sbrgkmn / contact@sabrigokmen.com
+- First push: branch must be main
+
+README Rules
+- Create on first push
+- Include: summary, features, getting started, controls
+- Header must match repo name
+- Update only for major changes
+
+Git Behavior
+- Do not track every change
+- Only check diffs when merging/pushing
+- Use clear commit messages
+
+One-Line Definition
+A rule-based system for generating Gothic apses through recursive geometry.

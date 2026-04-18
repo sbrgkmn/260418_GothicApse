@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apse 2D / 3D Recursive Generator</title>
+  <style>
+    :root {
+      --bg: #f2f2ef;
+      --panel: #ffffff;
+      --ink: #111111;
+      --muted: #606060;
+      --line: #d8d8d8;
+      --accent: #202020;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 15% 15%, #fafaf8, var(--bg));
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    .header {
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 0.5rem;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 1.3rem;
+      letter-spacing: 0.02em;
+    }
+
+    .header p {
+      margin: 0.4rem 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      max-width: 72ch;
+    }
+
+    .controls {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.9rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.8rem 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .control {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .control label {
+      font-size: 0.85rem;
+      letter-spacing: 0.015em;
+      color: #222;
+    }
+
+    .control input[type="range"],
+    .control input[type="text"],
+    .control input[type="number"] {
+      width: 100%;
+    }
+
+    .value-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      min-height: 1em;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      align-items: center;
+      grid-column: 1 / -1;
+      padding-top: 0.2rem;
+      border-top: 1px dashed var(--line);
+      margin-top: 0.25rem;
+    }
+
+    button {
+      border: 1px solid #262626;
+      background: #1f1f1f;
+      color: #fafafa;
+      border-radius: 6px;
+      padding: 0.5rem 0.8rem;
+      font-size: 0.86rem;
+      cursor: pointer;
+      transition: transform 100ms ease, opacity 100ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    .note {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .views {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 0.9rem;
+      letter-spacing: 0.03em;
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #f8f8f8);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-top: 0;
+      background: #fff;
+    }
+
+    @media (max-width: 1024px) {
+      .views {
+        grid-template-columns: 1fr;
+      }
+
+      .header p {
+        max-width: unset;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">
+      <h1>Recursive Apse Generator: Plan + Abstract 3D</h1>
+      <p>
+        Rule-based 2D recursion drives an abstract 3D triangle system using shared symmetry and sequence logic.
+        No server is required; this runs locally as a static HTML file.
+      </p>
+    </div>
+
+    <div class="controls">
+      <div class="control">
+        <label for="edges">Number of edges (odd)</label>
+        <input type="range" id="edges" min="3" max="11" step="2" value="7" />
+        <div class="value-row"><span>value</span><span id="edgesValue">7</span></div>
+      </div>
+
+      <div class="control">
+        <label for="sequence">Sequence (comma separated)</label>
+        <input type="text" id="sequence" value="1,1,1,2,3" />
+        <div class="value-row"><span>shared by 2D + 3D</span><span id="sequenceValue">5 terms</span></div>
+      </div>
+
+      <div class="control">
+        <label for="apseSize">Apse size</label>
+        <input type="range" id="apseSize" min="100" max="500" value="250" />
+        <div class="value-row"><span>pixels</span><span id="apseSizeValue">250</span></div>
+      </div>
+
+      <div class="control">
+        <label for="apseRatio">Ambulatory / chapel ratio</label>
+        <input type="range" id="apseRatio" min="10" max="90" value="60" />
+        <div class="value-row"><span>ambulatory share</span><span id="apseRatioValue">0.60</span></div>
+      </div>
+
+      <div class="control">
+        <label for="divisionThreshold">Division threshold</label>
+        <input type="range" id="divisionThreshold" min="10" max="150" value="80" />
+        <div class="value-row"><span>recursive stop</span><span id="divisionThresholdValue">80</span></div>
+      </div>
+
+      <div class="control">
+        <label for="columnSize">Column size factor</label>
+        <input type="range" id="columnSize" min="5" max="100" value="50" />
+        <div class="value-row"><span>scale</span><span id="columnSizeValue">0.50</span></div>
+      </div>
+
+      <div class="control">
+        <label for="chapelScale">Chapel scale factor</label>
+        <input type="range" id="chapelScale" min="50" max="95" value="80" />
+        <div class="value-row"><span>taper</span><span id="chapelScaleValue">0.80</span></div>
+      </div>
+
+      <div class="control">
+        <label for="wallThickness">Wall thickness</label>
+        <input type="range" id="wallThickness" min="2" max="20" value="10" />
+        <div class="value-row"><span>pixels</span><span id="wallThicknessValue">10</span></div>
+      </div>
+
+      <div class="control">
+        <label for="heightScale">3D height scale</label>
+        <input type="range" id="heightScale" min="40" max="260" value="120" />
+        <div class="value-row"><span>3D only</span><span id="heightScaleValue">120</span></div>
+      </div>
+
+      <div class="control">
+        <label for="depthScale">3D depth scale</label>
+        <input type="range" id="depthScale" min="30" max="180" value="100" />
+        <div class="value-row"><span>3D only</span><span id="depthScaleValue">1.00</span></div>
+      </div>
+
+      <div class="control">
+        <label for="rotationY">3D rotation Y</label>
+        <input type="range" id="rotationY" min="-180" max="180" value="35" />
+        <div class="value-row"><span>degrees</span><span id="rotationYValue">35°</span></div>
+      </div>
+
+      <div class="control">
+        <label for="seed">Seed (uint32)</label>
+        <input type="number" id="seed" min="0" max="4294967295" value="73213" />
+        <div class="value-row"><span>for deterministic randomize</span><span id="seedValue">73213</span></div>
+      </div>
+
+      <div class="actions">
+        <button id="randomizeButton" type="button">Randomize (Seeded)</button>
+        <button id="exportButton" type="button">Export PNG (2D + 3D)</button>
+        <span class="note">Tip: drag to rotate, Shift/right-drag to pan, wheel to zoom. Same seed + controls = same output.</span>
+      </div>
+    </div>
+
+    <div class="views">
+      <div class="panel">
+        <h2>Plan 2D</h2>
+        <canvas id="planCanvas" width="760" height="560"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Abstract 3D</h2>
+        <canvas id="view3dCanvas" width="760" height="560"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /** @typedef {{x:number, y:number}} Point2 */
+    /** @typedef {{x:number, y:number, z:number}} Point3 */
+    /** @typedef {{a:Point3, b:Point3, c:Point3, shade:number}} Triangle3 */
+    /** @typedef {{p1:Point2, p2:Point2, level:number, kind:string}} Segment2 */
+
+    /**
+     * @typedef {Object} ApseParams
+     * @property {number} edges
+     * @property {number[]} sequence
+     * @property {number} apseSize
+     * @property {number} apseRatio
+     * @property {number} divisionThreshold
+     * @property {number} columnSize
+     * @property {number} chapelScale
+     * @property {number} wallThickness
+     * @property {number} heightScale
+     * @property {number} depthScale
+     * @property {number} rotationY
+     * @property {number} seed
+     */
+
+    /**
+     * @typedef {Object} Ring2D
+     * @property {Point2[]} innerPoints
+     * @property {Point2[]} outerPoints
+     * @property {number} level
+     * @property {number} ringWidth
+     */
+
+    /**
+     * @typedef {Object} ChapelSegment2D
+     * @property {Point2} bottom1
+     * @property {Point2} bottom2
+     * @property {Point2} top1
+     * @property {Point2} top2
+     * @property {number} level
+     * @property {boolean} isTerminal
+     * @property {string} kind
+     */
+
+    /**
+     * @typedef {Object} Termination2D
+     * @property {Point2} p1
+     * @property {Point2} p2
+     * @property {Point2} center
+     * @property {number} radius
+     * @property {number} startAngle
+     * @property {number} endAngle
+     * @property {Point2[]} columnPoints
+     * @property {number} level
+     */
+
+    /**
+     * @typedef {Object} CircleMarker
+     * @property {Point2} point
+     * @property {number} radius
+     * @property {number} level
+     * @property {string} kind
+     */
+
+    /**
+     * @typedef {Object} Geometry2D
+     * @property {Ring2D[]} rings
+     * @property {ChapelSegment2D[]} chapels
+     * @property {Termination2D[]} terminations
+     * @property {CircleMarker[]} columns
+     * @property {Segment2[]} segments
+     * @property {{center:Point2, outerRadius:number, chapelSize:number, bounds:{minX:number,maxX:number,minY:number,maxY:number}}} meta
+     */
+
+    /**
+     * @typedef {Object} Mesh3D
+     * @property {Triangle3[]} triangles
+     * @property {{a:Point3,b:Point3}[]} wireEdges
+     * @property {{minX:number,maxX:number,minY:number,maxY:number,minZ:number,maxZ:number}} bounds
+     */
+
+    const planCanvas = document.getElementById('planCanvas');
+    const view3dCanvas = document.getElementById('view3dCanvas');
+    const planCtx = planCanvas.getContext('2d');
+    const view3dCtx = view3dCanvas.getContext('2d');
+
+    const controls = {
+      edges: document.getElementById('edges'),
+      sequence: document.getElementById('sequence'),
+      apseSize: document.getElementById('apseSize'),
+      apseRatio: document.getElementById('apseRatio'),
+      divisionThreshold: document.getElementById('divisionThreshold'),
+      columnSize: document.getElementById('columnSize'),
+      chapelScale: document.getElementById('chapelScale'),
+      wallThickness: document.getElementById('wallThickness'),
+      heightScale: document.getElementById('heightScale'),
+      depthScale: document.getElementById('depthScale'),
+      rotationY: document.getElementById('rotationY'),
+      seed: document.getElementById('seed'),
+      randomizeButton: document.getElementById('randomizeButton'),
+      exportButton: document.getElementById('exportButton')
+    };
+
+    const labels = {
+      edges: document.getElementById('edgesValue'),
+      sequence: document.getElementById('sequenceValue'),
+      apseSize: document.getElementById('apseSizeValue'),
+      apseRatio: document.getElementById('apseRatioValue'),
+      divisionThreshold: document.getElementById('divisionThresholdValue'),
+      columnSize: document.getElementById('columnSizeValue'),
+      chapelScale: document.getElementById('chapelScaleValue'),
+      wallThickness: document.getElementById('wallThicknessValue'),
+      heightScale: document.getElementById('heightScaleValue'),
+      depthScale: document.getElementById('depthScaleValue'),
+      rotationY: document.getElementById('rotationYValue'),
+      seed: document.getElementById('seedValue')
+    };
+
+    const TAU = Math.PI * 2;
+    const viewState = {
+      baseOrbitY: parseInt(controls.rotationY.value, 10) || 35,
+      orbitYDelta: 0,
+      orbitX: 35,
+      panX: 0,
+      panY: 0,
+      zoom: 1
+    };
+    const pointerState = {
+      active: false,
+      pointerId: null,
+      mode: 'rotate',
+      lastX: 0,
+      lastY: 0
+    };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    /**
+     * @param {string} input
+     * @returns {number[]}
+     */
+    function parseSequence(input) {
+      const parsed = String(input)
+        .split(',')
+        .map((n) => parseInt(n.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+
+      if (parsed.length === 0) {
+        return [1, 1, 1, 2, 3];
+      }
+
+      return parsed;
+    }
+
+    /**
+     * @param {number} seed
+     * @returns {() => number}
+     */
+    function mulberry32(seed) {
+      let state = seed >>> 0;
+      return function rand() {
+        state += 0x6D2B79F5;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    /**
+     * @param {number} seed
+     * @param {ApseParams} currentParams
+     * @returns {Partial<ApseParams>}
+     */
+    function seededRandomize(seed, currentParams) {
+      const rand = mulberry32(seed >>> 0);
+      const oddEdges = [3, 5, 7, 9, 11];
+      const randomEdges = oddEdges[Math.floor(rand() * oddEdges.length)];
+
+      const sequenceLength = 5;
+      const randomSequence = [];
+      for (let i = 0; i < sequenceLength; i++) {
+        const positionRatio = i / (sequenceLength - 1);
+        let weights = [
+          0.7 - 0.4 * positionRatio,
+          0.2 + 0.1 * positionRatio,
+          0.08 + 0.2 * positionRatio,
+          0.02 + 0.1 * positionRatio
+        ];
+        const total = weights.reduce((a, b) => a + b, 0);
+        weights = weights.map((w) => w / total);
+
+        let pick = rand();
+        let selected = 1;
+        for (let j = 0; j < weights.length; j++) {
+          pick -= weights[j];
+          if (pick <= 0) {
+            selected = j + 1;
+            break;
+          }
+        }
+        randomSequence.push(selected);
+      }
+
+      return {
+        ...currentParams,
+        edges: randomEdges,
+        sequence: randomSequence,
+        apseSize: Math.floor(rand() * 301) + 150,
+        apseRatio: (Math.floor(rand() * 51) + 30) / 100,
+        divisionThreshold: Math.floor(rand() * 91) + 30
+      };
+    }
+
+    /**
+     * @param {Point2} p1
+     * @param {Point2} p2
+     * @returns {number}
+     */
+    function distance2D(p1, p2) {
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      return Math.hypot(dx, dy);
+    }
+
+    /**
+     * @param {Point2} p1
+     * @param {Point2} p2
+     * @param {number} ratio
+     * @returns {Point2}
+     */
+    function lerpPoint2D(p1, p2, ratio) {
+      return {
+        x: p1.x + (p2.x - p1.x) * ratio,
+        y: p1.y + (p2.y - p1.y) * ratio
+      };
+    }
+
+    /**
+     * @param {number} x
+     * @param {number} y
+     * @returns {Point2}
+     */
+    function normalize2D(x, y) {
+      const length = Math.hypot(x, y);
+      if (length < 1e-9) {
+        return { x: 0, y: -1 };
+      }
+      return { x: x / length, y: y / length };
+    }
+
+    /**
+     * @param {number} innerRadius
+     * @param {number} outerRadius
+     * @param {number} sides
+     * @param {number} [rotation]
+     * @returns {{innerPoints:Point2[], outerPoints:Point2[]}}
+     */
+    function generateRingPoints(innerRadius, outerRadius, sides, rotation = Math.PI) {
+      const innerPoints = [];
+      const outerPoints = [];
+
+      for (let i = 0; i <= sides; i++) {
+        const angle = rotation + (i * Math.PI) / sides;
+        innerPoints.push({ x: innerRadius * Math.cos(angle), y: innerRadius * Math.sin(angle) });
+        outerPoints.push({ x: outerRadius * Math.cos(angle), y: outerRadius * Math.sin(angle) });
+      }
+
+      return { innerPoints, outerPoints };
+    }
+
+    /**
+     * @param {ApseParams} params
+     * @returns {Geometry2D}
+     */
+    function generate2DGeometry(params) {
+      const rings = [];
+      const chapels = [];
+      const terminations = [];
+      const columns = [];
+      const segments = [];
+
+      const bounds = {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY
+      };
+
+      /** @param {Point2} point */
+      function updateBounds(point) {
+        bounds.minX = Math.min(bounds.minX, point.x);
+        bounds.maxX = Math.max(bounds.maxX, point.x);
+        bounds.minY = Math.min(bounds.minY, point.y);
+        bounds.maxY = Math.max(bounds.maxY, point.y);
+      }
+
+      /**
+       * @param {Point2} point
+       * @param {number} radius
+       * @param {number} level
+       * @param {string} kind
+       */
+      function addColumn(point, radius, level, kind) {
+        columns.push({ point, radius, level, kind });
+        updateBounds({ x: point.x - radius, y: point.y - radius });
+        updateBounds({ x: point.x + radius, y: point.y + radius });
+      }
+
+      /**
+       * @param {number} innerRadius
+       * @param {number} outerRadius
+       * @param {number} level
+       */
+      function recurseAmbulatory(innerRadius, outerRadius, level) {
+        const ring = generateRingPoints(innerRadius, outerRadius, params.edges, Math.PI);
+        const ringWidth = outerRadius - innerRadius;
+        rings.push({ ...ring, level, ringWidth });
+
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          updateBounds(ring.innerPoints[i]);
+          updateBounds(ring.outerPoints[i]);
+        }
+
+        const sizeFactor = params.columnSize;
+        const arcLength = (Math.PI / params.edges) * Math.max(innerRadius, 1);
+        const columnRadius = Math.max(1.5, arcLength * sizeFactor * 0.3);
+
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          addColumn(ring.innerPoints[i], columnRadius, level, 'ring-inner');
+          addColumn(ring.outerPoints[i], columnRadius, level, 'ring-outer');
+        }
+
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          segments.push({ p1: ring.innerPoints[i], p2: ring.innerPoints[i + 1], level, kind: 'ring-inner-arc' });
+          segments.push({ p1: ring.outerPoints[i], p2: ring.outerPoints[i + 1], level, kind: 'ring-outer-arc' });
+          segments.push({ p1: ring.innerPoints[i], p2: ring.outerPoints[i], level, kind: 'ring-radial' });
+          segments.push({ p1: ring.innerPoints[i], p2: ring.outerPoints[i + 1], level, kind: 'ring-diagonal' });
+          segments.push({ p1: ring.outerPoints[i], p2: ring.innerPoints[i + 1], level, kind: 'ring-diagonal' });
+        }
+
+        const canRecurse = ringWidth > params.divisionThreshold && level < params.sequence.length - 1;
+        if (canRecurse) {
+          const segmentCount = params.sequence[level] || 1;
+          const segmentRatio = 1 / (segmentCount + 1);
+          const nextInnerRadius = outerRadius - ringWidth * segmentRatio;
+          recurseAmbulatory(nextInnerRadius, outerRadius, level + 1);
+        }
+      }
+
+      /**
+       * @param {Point2} p1
+       * @param {Point2} p2
+       * @param {number} level
+       */
+      function addTermination(p1, p2, level) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const length = Math.hypot(dx, dy);
+        const radius = length / 2;
+        const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        const angle = Math.atan2(dy, dx);
+        const startAngle = angle + Math.PI;
+        const endAngle = angle + TAU;
+
+        const numColumns = 5;
+        const columnPoints = [];
+        for (let i = 0; i < numColumns; i++) {
+          const t = i / (numColumns - 1);
+          const theta = startAngle + (endAngle - startAngle) * t;
+          const point = {
+            x: center.x + radius * Math.cos(theta),
+            y: center.y + radius * Math.sin(theta)
+          };
+          columnPoints.push(point);
+
+          const arcLength = Math.PI * radius;
+          const spacing = arcLength / Math.max(1, numColumns - 1);
+          const circleRadius = Math.max(1.2, spacing * params.columnSize * 0.3);
+          addColumn(point, circleRadius, level, 'termination');
+
+          segments.push({ p1: point, p2: center, level, kind: 'termination-radial' });
+        }
+
+        for (let i = 0; i <= 18; i++) {
+          const t = i / 18;
+          const theta = startAngle + (endAngle - startAngle) * t;
+          updateBounds({
+            x: center.x + (radius + params.wallThickness / 2) * Math.cos(theta),
+            y: center.y + (radius + params.wallThickness / 2) * Math.sin(theta)
+          });
+        }
+
+        terminations.push({
+          p1,
+          p2,
+          center,
+          radius,
+          startAngle,
+          endAngle,
+          columnPoints,
+          level
+        });
+      }
+
+      /**
+       * @param {Point2} p1
+       * @param {Point2} p2
+       * @param {number} chapelLength
+       * @param {number} level
+       */
+      function recurseChapel(p1, p2, chapelLength, level) {
+        const mid = lerpPoint2D(p1, p2, 0.5);
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const edgeLength = Math.hypot(dx, dy);
+
+        let normalX = -dy / Math.max(edgeLength, 1e-9);
+        let normalY = dx / Math.max(edgeLength, 1e-9);
+
+        const toCenter = { x: mid.x, y: mid.y };
+        const dot = normalX * toCenter.x + normalY * toCenter.y;
+        if (dot < 0) {
+          normalX = -normalX;
+          normalY = -normalY;
+        }
+
+        const scale = params.chapelScale;
+        const segmentCount = params.sequence[level] || 1;
+        const shouldSubdivide = chapelLength > params.divisionThreshold && level < params.sequence.length - 1;
+
+        const fullOffsetMid = { x: mid.x + normalX * chapelLength, y: mid.y + normalY * chapelLength };
+        const fullTop1 = {
+          x: fullOffsetMid.x + (p1.x - mid.x) * scale,
+          y: fullOffsetMid.y + (p1.y - mid.y) * scale
+        };
+        const fullTop2 = {
+          x: fullOffsetMid.x + (p2.x - mid.x) * scale,
+          y: fullOffsetMid.y + (p2.y - mid.y) * scale
+        };
+
+        if (!shouldSubdivide) {
+          const segment = {
+            bottom1: p1,
+            bottom2: p2,
+            top1: fullTop1,
+            top2: fullTop2,
+            level,
+            isTerminal: true,
+            kind: 'chapel'
+          };
+          chapels.push(segment);
+          addTermination(fullTop1, fullTop2, level + 1);
+
+          const bottomRadius = Math.max(1.5, edgeLength * params.columnSize * 0.15);
+          const topRadius = Math.max(1.5, distance2D(fullTop1, fullTop2) * params.columnSize * 0.15);
+          addColumn(p1, bottomRadius, level, 'chapel');
+          addColumn(p2, bottomRadius, level, 'chapel');
+          addColumn(fullTop1, topRadius, level, 'chapel');
+          addColumn(fullTop2, topRadius, level, 'chapel');
+
+          segments.push({ p1, p2, level, kind: 'chapel-bottom' });
+          segments.push({ p1: fullTop1, p2: fullTop2, level, kind: 'chapel-top' });
+          segments.push({ p1, p2: fullTop1, level, kind: 'chapel-side' });
+          segments.push({ p1: p2, p2: fullTop2, level, kind: 'chapel-side' });
+          segments.push({ p1, p2: fullTop2, level, kind: 'chapel-cross' });
+          segments.push({ p1: p2, p2: fullTop1, level, kind: 'chapel-cross' });
+
+          updateBounds(p1);
+          updateBounds(p2);
+          updateBounds(fullTop1);
+          updateBounds(fullTop2);
+          return;
+        }
+
+        const subdivisionRatio = 1 / (segmentCount + 1);
+        const currentLength = chapelLength * subdivisionRatio;
+        const remainingLength = chapelLength - currentLength;
+
+        const currentOffsetMid = { x: mid.x + normalX * currentLength, y: mid.y + normalY * currentLength };
+        const currentTop1 = {
+          x: currentOffsetMid.x + (p1.x - mid.x) * scale,
+          y: currentOffsetMid.y + (p1.y - mid.y) * scale
+        };
+        const currentTop2 = {
+          x: currentOffsetMid.x + (p2.x - mid.x) * scale,
+          y: currentOffsetMid.y + (p2.y - mid.y) * scale
+        };
+
+        chapels.push({
+          bottom1: p1,
+          bottom2: p2,
+          top1: currentTop1,
+          top2: currentTop2,
+          level,
+          isTerminal: false,
+          kind: 'chapel'
+        });
+
+        const bottomRadius = Math.max(1.5, edgeLength * params.columnSize * 0.15);
+        const topRadius = Math.max(1.5, distance2D(currentTop1, currentTop2) * params.columnSize * 0.15);
+        addColumn(p1, bottomRadius, level, 'chapel');
+        addColumn(p2, bottomRadius, level, 'chapel');
+        addColumn(currentTop1, topRadius, level, 'chapel');
+        addColumn(currentTop2, topRadius, level, 'chapel');
+
+        segments.push({ p1, p2, level, kind: 'chapel-bottom' });
+        segments.push({ p1: currentTop1, p2: currentTop2, level, kind: 'chapel-top' });
+        segments.push({ p1, p2: currentTop1, level, kind: 'chapel-side' });
+        segments.push({ p1: p2, p2: currentTop2, level, kind: 'chapel-side' });
+        segments.push({ p1, p2: currentTop2, level, kind: 'chapel-cross' });
+        segments.push({ p1: p2, p2: currentTop1, level, kind: 'chapel-cross' });
+
+        updateBounds(p1);
+        updateBounds(p2);
+        updateBounds(currentTop1);
+        updateBounds(currentTop2);
+
+        recurseChapel(currentTop1, currentTop2, remainingLength, level + 1);
+      }
+
+      const ambulatorySize = params.apseSize * params.apseRatio;
+      const chapelSize = params.apseSize * (1 - params.apseRatio);
+      const innerRadius = ambulatorySize * 0.6;
+
+      recurseAmbulatory(innerRadius, ambulatorySize, 0);
+
+      if (rings.length > 0) {
+        const baseRing = rings[0];
+        for (let i = 0; i < baseRing.outerPoints.length - 1; i++) {
+          recurseChapel(baseRing.outerPoints[i], baseRing.outerPoints[i + 1], chapelSize, 0);
+        }
+      }
+
+      if (!Number.isFinite(bounds.minX)) {
+        bounds.minX = -10;
+        bounds.maxX = 10;
+        bounds.minY = -10;
+        bounds.maxY = 10;
+      }
+
+      return {
+        rings,
+        chapels,
+        terminations,
+        columns,
+        segments,
+        meta: {
+          center: { x: 0, y: 0 },
+          outerRadius: ambulatorySize,
+          chapelSize,
+          bounds
+        }
+      };
+    }
+
+    /**
+     * @param {Point3} a
+     * @param {Point3} b
+     * @param {Point3} c
+     * @param {number} shade
+     * @returns {Triangle3}
+     */
+    function triangle(a, b, c, shade) {
+      return { a, b, c, shade };
+    }
+
+    /**
+     * @param {Point2} a1
+     * @param {Point2} a2
+     * @param {Point2} b1
+     * @param {Point2} b2
+     * @returns {Point2}
+     */
+    function lineIntersection(a1, a2, b1, b2) {
+      const x1 = a1.x;
+      const y1 = a1.y;
+      const x2 = a2.x;
+      const y2 = a2.y;
+      const x3 = b1.x;
+      const y3 = b1.y;
+      const x4 = b2.x;
+      const y4 = b2.y;
+
+      const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+      if (Math.abs(denom) < 1e-9) {
+        return {
+          x: (x1 + x2 + x3 + x4) / 4,
+          y: (y1 + y2 + y3 + y4) / 4
+        };
+      }
+
+      const detA = x1 * y2 - y1 * x2;
+      const detB = x3 * y4 - y3 * x4;
+      return {
+        x: (detA * (x3 - x4) - (x1 - x2) * detB) / denom,
+        y: (detA * (y3 - y4) - (y1 - y2) * detB) / denom
+      };
+    }
+
+    /**
+     * @param {number} radialNorm
+     * @param {number} levelNorm
+     * @param {ApseParams} params
+     * @returns {number}
+     */
+    function cascadeHeightValue(radialNorm, levelNorm, params) {
+      const terraceCount = Math.max(4, params.sequence.length * 2 + 2);
+      const base = clamp(0.72 * radialNorm + 0.28 * levelNorm, 0, 1);
+      const stepped = Math.floor(base * terraceCount) / terraceCount;
+      const topY = params.heightScale * 0.12;
+      const bottomY = -params.heightScale * 1.38;
+      return topY + (bottomY - topY) * stepped;
+    }
+
+    /**
+     * @param {Geometry2D} geometry2D
+     * @param {ApseParams} params
+     * @returns {Mesh3D}
+     */
+    function build3DTriangles(geometry2D, params) {
+      const triangles = [];
+      const wireEdges = [];
+
+      /** @type {Map<string, number>} */
+      const pointIndex = new Map();
+      /** @type {{x:number,y:number,level:number}[]} */
+      const planVertices = [];
+      /** @type {{i:number,j:number,k:number,shade:number}[]} */
+      const topTriangles = [];
+
+      const bounds2D = geometry2D.meta.bounds;
+      const maxRadius = Math.max(
+        1,
+        Math.hypot(bounds2D.minX, bounds2D.minY),
+        Math.hypot(bounds2D.maxX, bounds2D.maxY),
+        geometry2D.meta.outerRadius + geometry2D.meta.chapelSize
+      );
+      let maxLevel = 1;
+
+      /**
+       * @param {Point2} p
+       * @returns {string}
+       */
+      function pointKey(p) {
+        return `${p.x.toFixed(5)}|${p.y.toFixed(5)}`;
+      }
+
+      /**
+       * @param {Point2} p
+       * @param {number} level
+       * @returns {number}
+       */
+      function getVertexIndex(p, level) {
+        const key = pointKey(p);
+        if (pointIndex.has(key)) {
+          const idx = pointIndex.get(key);
+          if (idx !== undefined) {
+            planVertices[idx].level = Math.max(planVertices[idx].level, level);
+            maxLevel = Math.max(maxLevel, planVertices[idx].level);
+            return idx;
+          }
+        }
+        const idx = planVertices.length;
+        pointIndex.set(key, idx);
+        planVertices.push({ x: p.x, y: p.y, level });
+        maxLevel = Math.max(maxLevel, level);
+        return idx;
+      }
+
+      /**
+       * @param {number} i
+       * @param {number} j
+       * @param {number} k
+       * @param {number} shade
+       */
+      function addTopTriangle(i, j, k, shade) {
+        if (i === j || j === k || i === k) {
+          return;
+        }
+        topTriangles.push({ i, j, k, shade });
+      }
+
+      const centerIdx = getVertexIndex({ x: 0, y: 0 }, 0);
+
+      for (const ring of geometry2D.rings) {
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          const i0 = getVertexIndex(ring.innerPoints[i], ring.level + 1);
+          const i1 = getVertexIndex(ring.innerPoints[i + 1], ring.level + 1);
+          const o0 = getVertexIndex(ring.outerPoints[i], ring.level + 2);
+          const o1 = getVertexIndex(ring.outerPoints[i + 1], ring.level + 2);
+          const cross = lineIntersection(
+            ring.innerPoints[i],
+            ring.outerPoints[i + 1],
+            ring.outerPoints[i],
+            ring.innerPoints[i + 1]
+          );
+          const c = getVertexIndex(cross, ring.level + 2);
+
+          addTopTriangle(centerIdx, i0, i1, 0.72 - ring.level * 0.03);
+          addTopTriangle(i0, i1, c, 0.62);
+          addTopTriangle(i1, o1, c, 0.58);
+          addTopTriangle(o1, o0, c, 0.54);
+          addTopTriangle(o0, i0, c, 0.5);
+        }
+      }
+
+      for (const chapel of geometry2D.chapels) {
+        const b1 = getVertexIndex(chapel.bottom1, chapel.level + 2);
+        const b2 = getVertexIndex(chapel.bottom2, chapel.level + 2);
+        const t1 = getVertexIndex(chapel.top1, chapel.level + 3);
+        const t2 = getVertexIndex(chapel.top2, chapel.level + 3);
+        const cross = lineIntersection(chapel.bottom1, chapel.top2, chapel.bottom2, chapel.top1);
+        const c = getVertexIndex(cross, chapel.level + 3);
+
+        addTopTriangle(b1, b2, c, 0.6);
+        addTopTriangle(b2, t2, c, 0.56);
+        addTopTriangle(t2, t1, c, 0.52);
+        addTopTriangle(t1, b1, c, 0.48);
+      }
+
+      for (const term of geometry2D.terminations) {
+        const c = getVertexIndex(term.center, term.level + 3);
+        for (let i = 0; i < term.columnPoints.length - 1; i++) {
+          const p = getVertexIndex(term.columnPoints[i], term.level + 4);
+          const q = getVertexIndex(term.columnPoints[i + 1], term.level + 4);
+          addTopTriangle(c, p, q, 0.5);
+        }
+      }
+
+      /** @type {Point3[]} */
+      const vertices3D = planVertices.map((v) => {
+        const radialNorm = clamp(Math.hypot(v.x, v.y) / maxRadius, 0, 1);
+        const levelNorm = clamp(v.level / Math.max(1, maxLevel), 0, 1);
+        return {
+          x: v.x,
+          y: cascadeHeightValue(radialNorm, levelNorm, params),
+          z: v.y * params.depthScale
+        };
+      });
+
+      /**
+       * @param {number} i
+       * @param {number} j
+       * @param {number} k
+       * @param {number} shade
+       */
+      function addMeshTriangle(i, j, k, shade) {
+        const a = vertices3D[i];
+        const b = vertices3D[j];
+        const c = vertices3D[k];
+        if (!a || !b || !c) {
+          return;
+        }
+        const area = Math.abs((b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x));
+        if (area < 1e-9) {
+          return;
+        }
+        triangles.push(triangle(a, b, c, shade));
+        wireEdges.push({ a, b });
+        wireEdges.push({ a: b, b: c });
+        wireEdges.push({ a: c, b: a });
+      }
+
+      for (const tri of topTriangles) {
+        addMeshTriangle(tri.i, tri.j, tri.k, tri.shade);
+      }
+
+      /** @type {Map<string, {i:number,j:number,count:number}>} */
+      const edgeUse = new Map();
+      for (const tri of topTriangles) {
+        const edges = [
+          [tri.i, tri.j],
+          [tri.j, tri.k],
+          [tri.k, tri.i]
+        ];
+        for (const edge of edges) {
+          const i = Math.min(edge[0], edge[1]);
+          const j = Math.max(edge[0], edge[1]);
+          const key = `${i}|${j}`;
+          const hit = edgeUse.get(key);
+          if (hit) {
+            hit.count += 1;
+          } else {
+            edgeUse.set(key, { i, j, count: 1 });
+          }
+        }
+      }
+
+      const baseY = -params.heightScale * 1.5;
+      /** @type {Map<number, number>} */
+      const bottomIndexByTop = new Map();
+      function bottomVertexFor(topIdx) {
+        if (bottomIndexByTop.has(topIdx)) {
+          const idx = bottomIndexByTop.get(topIdx);
+          if (idx !== undefined) {
+            return idx;
+          }
+        }
+        const top = vertices3D[topIdx];
+        const idx = vertices3D.length;
+        vertices3D.push({ x: top.x, y: baseY, z: top.z });
+        bottomIndexByTop.set(topIdx, idx);
+        return idx;
+      }
+
+      for (const edge of edgeUse.values()) {
+        if (edge.count !== 1) {
+          continue;
+        }
+        const bi = bottomVertexFor(edge.i);
+        const bj = bottomVertexFor(edge.j);
+        addMeshTriangle(edge.i, edge.j, bj, 0.36);
+        addMeshTriangle(edge.i, bj, bi, 0.32);
+      }
+
+      const bounds = {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY,
+        minZ: Number.POSITIVE_INFINITY,
+        maxZ: Number.NEGATIVE_INFINITY
+      };
+
+      for (const tri of triangles) {
+        for (const v of [tri.a, tri.b, tri.c]) {
+          bounds.minX = Math.min(bounds.minX, v.x);
+          bounds.maxX = Math.max(bounds.maxX, v.x);
+          bounds.minY = Math.min(bounds.minY, v.y);
+          bounds.maxY = Math.max(bounds.maxY, v.y);
+          bounds.minZ = Math.min(bounds.minZ, v.z);
+          bounds.maxZ = Math.max(bounds.maxZ, v.z);
+        }
+      }
+
+      if (!Number.isFinite(bounds.minX)) {
+        bounds.minX = bounds.minY = bounds.minZ = -1;
+        bounds.maxX = bounds.maxY = bounds.maxZ = 1;
+      }
+
+      return { triangles, wireEdges, bounds };
+    }
+
+    /**
+     * @param {Geometry2D} geometry2D
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {ApseParams} params
+     */
+    function render2D(geometry2D, ctx, params) {
+      const width = ctx.canvas.width;
+      const height = ctx.canvas.height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      const b = geometry2D.meta.bounds;
+      const pad = 24;
+      const spanX = Math.max(1, b.maxX - b.minX);
+      const spanY = Math.max(1, b.maxY - b.minY);
+      const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+      const tx = (width - (b.minX + b.maxX) * scale) / 2;
+      const ty = (height - (b.minY + b.maxY) * scale) / 2;
+
+      ctx.setTransform(scale, 0, 0, scale, tx, ty);
+      const thin = 1.4 / scale;
+
+      function drawThickEdge(start, end, thickness) {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-6) {
+          return;
+        }
+        const px = -dy / len;
+        const py = dx / len;
+
+        const a = { x: start.x + px * thickness / 2, y: start.y + py * thickness / 2 };
+        const b2 = { x: start.x - px * thickness / 2, y: start.y - py * thickness / 2 };
+        const c = { x: end.x - px * thickness / 2, y: end.y - py * thickness / 2 };
+        const d = { x: end.x + px * thickness / 2, y: end.y + py * thickness / 2 };
+
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b2.x, b2.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.lineTo(d.x, d.y);
+        ctx.closePath();
+        ctx.fillStyle = '#141414';
+        ctx.fill();
+      }
+
+      for (const ring of geometry2D.rings) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = thin;
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          ctx.moveTo(0, 0);
+          ctx.lineTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          ctx.moveTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+          ctx.lineTo(ring.innerPoints[i + 1].x, ring.innerPoints[i + 1].y);
+          ctx.moveTo(ring.outerPoints[i].x, ring.outerPoints[i].y);
+          ctx.lineTo(ring.outerPoints[i + 1].x, ring.outerPoints[i + 1].y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          ctx.moveTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+          ctx.lineTo(ring.outerPoints[i].x, ring.outerPoints[i].y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          ctx.moveTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+          ctx.lineTo(ring.outerPoints[i + 1].x, ring.outerPoints[i + 1].y);
+          ctx.moveTo(ring.outerPoints[i].x, ring.outerPoints[i].y);
+          ctx.lineTo(ring.innerPoints[i + 1].x, ring.innerPoints[i + 1].y);
+        }
+        ctx.stroke();
+      }
+
+      for (const chapel of geometry2D.chapels) {
+        drawThickEdge(chapel.bottom1, chapel.top1, params.wallThickness);
+        drawThickEdge(chapel.bottom2, chapel.top2, params.wallThickness);
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = thin;
+        ctx.moveTo(chapel.bottom1.x, chapel.bottom1.y);
+        ctx.lineTo(chapel.bottom2.x, chapel.bottom2.y);
+        ctx.moveTo(chapel.top1.x, chapel.top1.y);
+        ctx.lineTo(chapel.top2.x, chapel.top2.y);
+        ctx.moveTo(chapel.bottom1.x, chapel.bottom1.y);
+        ctx.lineTo(chapel.top2.x, chapel.top2.y);
+        ctx.moveTo(chapel.bottom2.x, chapel.bottom2.y);
+        ctx.lineTo(chapel.top1.x, chapel.top1.y);
+        ctx.stroke();
+      }
+
+      for (const term of geometry2D.terminations) {
+        const outerRadius = term.radius + params.wallThickness / 2;
+        const innerRadius = Math.max(0, term.radius - params.wallThickness / 2);
+
+        ctx.beginPath();
+        ctx.arc(term.center.x, term.center.y, outerRadius, term.startAngle, term.endAngle);
+        ctx.lineTo(
+          term.center.x + innerRadius * Math.cos(term.endAngle),
+          term.center.y + innerRadius * Math.sin(term.endAngle)
+        );
+        ctx.arc(term.center.x, term.center.y, innerRadius, term.endAngle, term.startAngle, true);
+        ctx.closePath();
+        ctx.fillStyle = '#141414';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = thin;
+        for (const p of term.columnPoints) {
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(term.center.x, term.center.y);
+        }
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#111';
+      for (const col of geometry2D.columns) {
+        ctx.beginPath();
+        ctx.arc(col.point.x, col.point.y, col.radius, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    /**
+     * @param {Point3} point
+     * @param {number} yawRad
+     * @param {number} pitchRad
+     * @returns {{x:number,y:number,z:number}}
+     */
+    function rotateForCamera(point, yawRad, pitchRad) {
+      const cy = Math.cos(yawRad);
+      const sy = Math.sin(yawRad);
+      const x1 = point.x * cy - point.z * sy;
+      const z1 = point.x * sy + point.z * cy;
+
+      const ct = Math.cos(pitchRad);
+      const st = Math.sin(pitchRad);
+      const y1 = point.y * ct - z1 * st;
+      const z2 = point.y * st + z1 * ct;
+
+      return { x: x1, y: y1, z: z2 };
+    }
+
+    /**
+     * @param {Point3} a
+     * @param {Point3} b
+     * @param {Point3} c
+     * @returns {Point3}
+     */
+    function normal3(a, b, c) {
+      const ux = b.x - a.x;
+      const uy = b.y - a.y;
+      const uz = b.z - a.z;
+      const vx = c.x - a.x;
+      const vy = c.y - a.y;
+      const vz = c.z - a.z;
+      return {
+        x: uy * vz - uz * vy,
+        y: uz * vx - ux * vz,
+        z: ux * vy - uy * vx
+      };
+    }
+
+    /**
+     * @param {Point3} v
+     * @returns {Point3}
+     */
+    function normalize3(v) {
+      const len = Math.hypot(v.x, v.y, v.z);
+      if (len < 1e-9) {
+        return { x: 0, y: 1, z: 0 };
+      }
+      return { x: v.x / len, y: v.y / len, z: v.z / len };
+    }
+
+    /**
+     * @param {Mesh3D} mesh3D
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {ApseParams} params
+     */
+    function render3D(mesh3D, ctx, params) {
+      const width = ctx.canvas.width;
+      const height = ctx.canvas.height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      const orbitY = viewState.baseOrbitY + viewState.orbitYDelta;
+      const yawRad = (orbitY * Math.PI) / 180;
+      const pitchRad = (viewState.orbitX * Math.PI) / 180;
+      const transformed = [];
+      const projectedBounds = {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY
+      };
+
+      for (const tri of mesh3D.triangles) {
+        const ra = rotateForCamera(tri.a, yawRad, pitchRad);
+        const rb = rotateForCamera(tri.b, yawRad, pitchRad);
+        const rc = rotateForCamera(tri.c, yawRad, pitchRad);
+        const a = { x: ra.x, y: -ra.y, z: ra.z };
+        const b = { x: rb.x, y: -rb.y, z: rb.z };
+        const c = { x: rc.x, y: -rc.y, z: rc.z };
+
+        projectedBounds.minX = Math.min(projectedBounds.minX, a.x, b.x, c.x);
+        projectedBounds.maxX = Math.max(projectedBounds.maxX, a.x, b.x, c.x);
+        projectedBounds.minY = Math.min(projectedBounds.minY, a.y, b.y, c.y);
+        projectedBounds.maxY = Math.max(projectedBounds.maxY, a.y, b.y, c.y);
+
+        transformed.push({
+          a,
+          b,
+          c,
+          ra,
+          rb,
+          rc,
+          baseShade: tri.shade,
+          depth: (a.z + b.z + c.z) / 3
+        });
+      }
+
+      if (transformed.length === 0) {
+        return;
+      }
+
+      const pad = 28;
+      const spanX = Math.max(1, projectedBounds.maxX - projectedBounds.minX);
+      const spanY = Math.max(1, projectedBounds.maxY - projectedBounds.minY);
+      const fitScale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+      const scale = fitScale * viewState.zoom;
+      const midX = (projectedBounds.minX + projectedBounds.maxX) / 2;
+      const midY = (projectedBounds.minY + projectedBounds.maxY) / 2;
+      const tx = width / 2 - midX * scale + viewState.panX;
+      const ty = height / 2 - midY * scale + viewState.panY;
+
+      transformed.sort((m, n) => m.depth - n.depth);
+
+      const lightDir = normalize3({ x: 0.35, y: 0.84, z: 0.42 });
+
+      for (const tri of transformed) {
+        const n = normalize3(normal3(tri.ra, tri.rb, tri.rc));
+        const lambert = clamp((n.x * lightDir.x + n.y * lightDir.y + n.z * lightDir.z + 1) / 2, 0, 1);
+        const brightness = clamp(0.24 + lambert * 0.55 + tri.baseShade * 0.2, 0, 1);
+        const gray = Math.round(28 + brightness * 180);
+
+        ctx.beginPath();
+        ctx.moveTo(tri.a.x * scale + tx, tri.a.y * scale + ty);
+        ctx.lineTo(tri.b.x * scale + tx, tri.b.y * scale + ty);
+        ctx.lineTo(tri.c.x * scale + tx, tri.c.y * scale + ty);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${gray}, ${gray}, ${gray}, 0.92)`;
+        ctx.fill();
+        ctx.strokeStyle = '#151515';
+        ctx.lineWidth = 0.9;
+        ctx.stroke();
+      }
+    }
+
+    /** @returns {ApseParams} */
+    function readParams() {
+      return {
+        edges: parseInt(controls.edges.value, 10),
+        sequence: parseSequence(controls.sequence.value),
+        apseSize: parseInt(controls.apseSize.value, 10),
+        apseRatio: parseInt(controls.apseRatio.value, 10) / 100,
+        divisionThreshold: parseInt(controls.divisionThreshold.value, 10),
+        columnSize: parseInt(controls.columnSize.value, 10) / 100,
+        chapelScale: parseInt(controls.chapelScale.value, 10) / 100,
+        wallThickness: parseInt(controls.wallThickness.value, 10),
+        heightScale: parseInt(controls.heightScale.value, 10),
+        depthScale: parseInt(controls.depthScale.value, 10) / 100,
+        rotationY: parseInt(controls.rotationY.value, 10),
+        seed: (parseInt(controls.seed.value, 10) >>> 0) || 0
+      };
+    }
+
+    /**
+     * @param {ApseParams} params
+     */
+    function syncLabels(params) {
+      labels.edges.textContent = String(params.edges);
+      labels.sequence.textContent = `${params.sequence.length} terms`;
+      labels.apseSize.textContent = String(params.apseSize);
+      labels.apseRatio.textContent = params.apseRatio.toFixed(2);
+      labels.divisionThreshold.textContent = String(params.divisionThreshold);
+      labels.columnSize.textContent = params.columnSize.toFixed(2);
+      labels.chapelScale.textContent = params.chapelScale.toFixed(2);
+      labels.wallThickness.textContent = String(params.wallThickness);
+      labels.heightScale.textContent = String(params.heightScale);
+      labels.depthScale.textContent = params.depthScale.toFixed(2);
+      labels.rotationY.textContent = `${Math.round(viewState.baseOrbitY + viewState.orbitYDelta)}°`;
+      labels.seed.textContent = String(params.seed >>> 0);
+    }
+
+    function redraw() {
+      const params = readParams();
+      viewState.baseOrbitY = params.rotationY;
+      syncLabels(params);
+      const geometry2D = generate2DGeometry(params);
+      const mesh3D = build3DTriangles(geometry2D, params);
+      render2D(geometry2D, planCtx, params);
+      render3D(mesh3D, view3dCtx, params);
+    }
+
+    function applyRandomizedParams() {
+      const params = readParams();
+      const randomized = seededRandomize(params.seed, params);
+
+      controls.edges.value = String(randomized.edges);
+      controls.sequence.value = randomized.sequence.join(',');
+      controls.apseSize.value = String(randomized.apseSize);
+      controls.apseRatio.value = String(Math.round(randomized.apseRatio * 100));
+      controls.divisionThreshold.value = String(randomized.divisionThreshold);
+
+      redraw();
+    }
+
+    function exportViews() {
+      const seed = (parseInt(controls.seed.value, 10) >>> 0) || 0;
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+
+      const gap = 14;
+      const out = document.createElement('canvas');
+      out.width = planCanvas.width + view3dCanvas.width + gap;
+      out.height = Math.max(planCanvas.height, view3dCanvas.height);
+      const outCtx = out.getContext('2d');
+
+      outCtx.fillStyle = '#fff';
+      outCtx.fillRect(0, 0, out.width, out.height);
+      outCtx.drawImage(planCanvas, 0, 0);
+      outCtx.drawImage(view3dCanvas, planCanvas.width + gap, 0);
+
+      const link = document.createElement('a');
+      link.href = out.toDataURL('image/png');
+      link.download = `apse_2d3d_seed-${seed}_${timestamp}.png`;
+      link.click();
+    }
+
+    function resetView3D() {
+      viewState.orbitYDelta = 0;
+      viewState.orbitX = 35;
+      viewState.panX = 0;
+      viewState.panY = 0;
+      viewState.zoom = 1;
+    }
+
+    /**
+     * @param {PointerEvent} event
+     */
+    function on3DPointerDown(event) {
+      pointerState.active = true;
+      pointerState.pointerId = event.pointerId;
+      pointerState.lastX = event.clientX;
+      pointerState.lastY = event.clientY;
+      pointerState.mode = event.button === 2 || event.shiftKey ? 'pan' : 'rotate';
+      view3dCanvas.setPointerCapture(event.pointerId);
+    }
+
+    /**
+     * @param {PointerEvent} event
+     */
+    function on3DPointerMove(event) {
+      if (!pointerState.active || event.pointerId !== pointerState.pointerId) {
+        return;
+      }
+
+      const dx = event.clientX - pointerState.lastX;
+      const dy = event.clientY - pointerState.lastY;
+      pointerState.lastX = event.clientX;
+      pointerState.lastY = event.clientY;
+
+      if (pointerState.mode === 'pan') {
+        viewState.panX += dx;
+        viewState.panY += dy;
+      } else {
+        viewState.orbitYDelta += dx * 0.42;
+        viewState.orbitX = clamp(viewState.orbitX + dy * 0.24, 12, 82);
+      }
+
+      redraw();
+    }
+
+    /**
+     * @param {PointerEvent} event
+     */
+    function on3DPointerUp(event) {
+      if (!pointerState.active || event.pointerId !== pointerState.pointerId) {
+        return;
+      }
+      pointerState.active = false;
+      pointerState.pointerId = null;
+      view3dCanvas.releasePointerCapture(event.pointerId);
+    }
+
+    controls.randomizeButton.addEventListener('click', applyRandomizedParams);
+    controls.exportButton.addEventListener('click', exportViews);
+
+    const liveUpdateInputs = [
+      controls.edges,
+      controls.sequence,
+      controls.apseSize,
+      controls.apseRatio,
+      controls.divisionThreshold,
+      controls.columnSize,
+      controls.chapelScale,
+      controls.wallThickness,
+      controls.heightScale,
+      controls.depthScale,
+      controls.seed
+    ];
+
+    for (const el of liveUpdateInputs) {
+      el.addEventListener('input', redraw);
+      el.addEventListener('change', redraw);
+    }
+
+    controls.rotationY.addEventListener('input', () => {
+      viewState.orbitYDelta = 0;
+      redraw();
+    });
+    controls.rotationY.addEventListener('change', () => {
+      viewState.orbitYDelta = 0;
+      redraw();
+    });
+
+    view3dCanvas.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+    });
+    view3dCanvas.addEventListener('pointerdown', on3DPointerDown);
+    view3dCanvas.addEventListener('pointermove', on3DPointerMove);
+    view3dCanvas.addEventListener('pointerup', on3DPointerUp);
+    view3dCanvas.addEventListener('pointercancel', on3DPointerUp);
+    view3dCanvas.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault();
+        const zoomFactor = Math.exp(-event.deltaY * 0.0012);
+        viewState.zoom = clamp(viewState.zoom * zoomFactor, 0.35, 5);
+        redraw();
+      },
+      { passive: false }
+    );
+    view3dCanvas.addEventListener('dblclick', () => {
+      resetView3D();
+      redraw();
+    });
+
+    redraw();
+  </script>
+</body>
+</html>
