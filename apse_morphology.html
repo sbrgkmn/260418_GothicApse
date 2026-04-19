@@ -1903,6 +1903,99 @@
 
     /**
      * @param {Geometry2D} geometry2D
+     * @param {ApseParams} params
+     * @returns {{point:Point2, radius:number, kinds:Set<string>}[]}
+     */
+    function computePlanColumns(geometry2D, params) {
+      /** @type {Map<string, {point:Point2, baseRadius:number, kinds:Set<string>}>} */
+      const uniqueColumns = new Map();
+      for (const column of geometry2D.columns) {
+        const key = pointKey(column.point);
+        const existing = uniqueColumns.get(key);
+        if (existing) {
+          existing.baseRadius = Math.min(existing.baseRadius, column.radius);
+          existing.kinds.add(column.kind);
+          continue;
+        }
+        uniqueColumns.set(key, {
+          point: column.point,
+          baseRadius: column.radius,
+          kinds: new Set([column.kind])
+        });
+      }
+
+      /** @type {Map<string, number>} */
+      const adjacencySpan = new Map();
+      /**
+       * @param {Point2} point
+       * @param {number} distance
+       */
+      function recordAdjacency(point, distance) {
+        if (!Number.isFinite(distance) || distance <= 1e-6) {
+          return;
+        }
+        const key = pointKey(point);
+        const previous = adjacencySpan.get(key);
+        adjacencySpan.set(key, previous === undefined ? distance : Math.min(previous, distance));
+      }
+
+      for (const segment of geometry2D.segments) {
+        const span = distance2D(segment.p1, segment.p2);
+        recordAdjacency(segment.p1, span);
+        recordAdjacency(segment.p2, span);
+      }
+
+      const columns = [...uniqueColumns.values()];
+      const baseFactor = 0.028 + params.columnSize * 0.04;
+
+      /**
+       * @param {Set<string>} kinds
+       * @returns {number}
+       */
+      function kindFactor(kinds) {
+        if (kinds.has('buttress')) {
+          return 1.1;
+        }
+        if (kinds.has('termination')) {
+          return 0.92;
+        }
+        if (kinds.has('chapel')) {
+          return 0.9;
+        }
+        return 1;
+      }
+
+      return columns.map((column, index) => {
+        let nearestSpan = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < columns.length; i++) {
+          if (i === index) {
+            continue;
+          }
+          nearestSpan = Math.min(nearestSpan, distance2D(column.point, columns[i].point));
+        }
+        const connectedSpan = adjacencySpan.get(pointKey(column.point)) ?? Number.POSITIVE_INFINITY;
+        const localSpan = Math.min(connectedSpan, nearestSpan);
+        const fallbackSpan = Math.max(
+          geometry2D.meta.outerRadius * 0.045,
+          Number.isFinite(connectedSpan) ? connectedSpan : 0,
+          Number.isFinite(nearestSpan) ? nearestSpan : 0
+        );
+        const effectiveSpan = Number.isFinite(localSpan) ? localSpan : fallbackSpan;
+        const radius = clamp(
+          effectiveSpan * baseFactor * kindFactor(column.kinds),
+          0.9,
+          4.6
+        );
+        return {
+          point: column.point,
+          radius,
+          kinds: column.kinds
+        };
+      });
+    }
+
+    /**
+     * @param {Geometry2D} geometry2D
      * @param {CanvasRenderingContext2D} ctx
      * @param {ApseParams} params
      */
@@ -2024,7 +2117,8 @@
       }
 
       ctx.fillStyle = '#111';
-      for (const col of geometry2D.columns) {
+      const planColumns = computePlanColumns(geometry2D, params);
+      for (const col of planColumns) {
         ctx.beginPath();
         ctx.arc(col.point.x, col.point.y, col.radius, 0, TAU);
         ctx.fill();
