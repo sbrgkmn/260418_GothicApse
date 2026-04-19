@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apse Morphology Generator</title>
+  <style>
+    :root {
+      --bg: #f2f2ef;
+      --panel: #ffffff;
+      --ink: #111111;
+      --muted: #606060;
+      --line: #d8d8d8;
+      --accent: #202020;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 15% 15%, #fafaf8, var(--bg));
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    .header {
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 0.5rem;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 1.3rem;
+      letter-spacing: 0.02em;
+    }
+
+    .header p {
+      margin: 0.4rem 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      max-width: 72ch;
+    }
+
+    .controls {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.9rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.8rem 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .control {
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .control-section {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 1rem;
+      padding-top: 0.25rem;
+      margin-top: 0.1rem;
+      border-top: 1px dashed var(--line);
+    }
+
+    .control-section:first-child {
+      padding-top: 0;
+      margin-top: 0;
+      border-top: 0;
+    }
+
+    .control-section h3 {
+      margin: 0;
+      font-size: 0.76rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .control-section span {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .control label {
+      font-size: 0.85rem;
+      letter-spacing: 0.015em;
+      color: #222;
+    }
+
+    .control input[type="range"],
+    .control input[type="text"],
+    .control input[type="number"] {
+      width: 100%;
+    }
+
+    .value-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      min-height: 1em;
+    }
+
+    .static-readout {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0.55rem 0.7rem;
+      background: linear-gradient(180deg, #fbfbfa, #f2f2ef);
+      font-size: 0.9rem;
+      color: #1e1e1e;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      align-items: center;
+      grid-column: 1 / -1;
+      padding-top: 0.2rem;
+      border-top: 1px dashed var(--line);
+      margin-top: 0.25rem;
+    }
+
+    button {
+      border: 1px solid #262626;
+      background: #1f1f1f;
+      color: #fafafa;
+      border-radius: 6px;
+      padding: 0.5rem 0.8rem;
+      font-size: 0.86rem;
+      cursor: pointer;
+      transition: transform 100ms ease, opacity 100ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    button.secondary {
+      background: #fafaf8;
+      color: #1f1f1f;
+      border-color: var(--line);
+    }
+
+    .note {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .views {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.9rem;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 0.9rem;
+      letter-spacing: 0.03em;
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #f8f8f8);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-top: 0;
+      background: #fff;
+    }
+
+    @media (max-width: 1024px) {
+      .views {
+        grid-template-columns: 1fr;
+      }
+
+      .header p {
+        max-width: unset;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">
+      <h1>Apse Morphology Generator: Plan + 3D Rib Web</h1>
+      <p>
+        Separate morphology sandbox for historical apse families. Rule-based 2D recursion drives a fixed exterior isometric rib web built from central,
+        ambulatory, and chapel vault divisions as a single line layer.
+      </p>
+    </div>
+
+    <div class="controls">
+      <div class="control-section">
+        <h3>Plan</h3>
+        <span>Recursive plan rules shared by plan and shell</span>
+      </div>
+
+      <div class="control">
+        <label for="edges">Bay count</label>
+        <input type="range" id="edges" min="5" max="7" step="2" value="7" />
+        <div class="value-row"><span>gothic set</span><span id="edgesValue">7</span></div>
+      </div>
+
+      <div class="control">
+        <label for="sequence">Sequence (comma separated)</label>
+        <input type="text" id="sequence" value="1,1,2,2,3" />
+        <div class="value-row"><span>shared by 2D + 3D</span><span id="sequenceValue">5 terms</span></div>
+      </div>
+
+      <div class="control">
+        <label for="apseSize">Apse size</label>
+        <input type="range" id="apseSize" min="100" max="500" value="250" />
+        <div class="value-row"><span>pixels</span><span id="apseSizeValue">250</span></div>
+      </div>
+
+      <div class="control">
+        <label for="apseRatio">Ambulatory / chapel ratio</label>
+        <input type="range" id="apseRatio" min="20" max="90" value="72" />
+        <div class="value-row"><span>ambulatory share</span><span id="apseRatioValue">0.72</span></div>
+      </div>
+
+      <div class="control">
+        <label for="divisionThreshold">Division threshold</label>
+        <input type="range" id="divisionThreshold" min="30" max="140" value="75" />
+        <div class="value-row"><span>recursive stop</span><span id="divisionThresholdValue">75</span></div>
+      </div>
+
+      <div class="control-section">
+        <h3>Massing</h3>
+        <span>Pointed-arch rib web with a single visible vault line layer</span>
+      </div>
+
+      <div class="control">
+        <label for="columnSize">2D marker size</label>
+        <input type="range" id="columnSize" min="5" max="100" value="50" />
+        <div class="value-row"><span>plan markers only</span><span id="columnSizeValue">0.50</span></div>
+      </div>
+
+      <div class="control">
+        <label for="chapelScale">Chapel scale factor</label>
+        <input type="range" id="chapelScale" min="60" max="120" value="92" />
+        <div class="value-row"><span>spread</span><span id="chapelScaleValue">0.92</span></div>
+      </div>
+
+      <div class="control">
+        <label for="heightScale">3D height scale</label>
+        <input type="range" id="heightScale" min="60" max="760" value="240" />
+        <div class="value-row"><span>section + supports</span><span id="heightScaleValue">240</span></div>
+      </div>
+
+      <div class="control-section">
+        <h3>View</h3>
+        <span>Exterior isometric projection locked to the outside of the apse</span>
+      </div>
+
+      <div class="control">
+        <label>3D camera</label>
+        <div class="static-readout">Fixed exterior isometric</div>
+        <div class="value-row"><span>drag pans, wheel zooms</span><span>double-click resets</span></div>
+      </div>
+
+      <div class="control">
+        <label for="displayMode">Display mode</label>
+        <select id="displayMode">
+          <option value="full" selected>Full radial bay</option>
+          <option value="single">Single bay</option>
+        </select>
+        <div class="value-row"><span>inspection</span><span id="displayModeValue">Full radial bay</span></div>
+      </div>
+
+      <div class="control-section">
+        <h3>Randomness</h3>
+        <span>Randomize writes a new seed, Apply Seed replays the visible one</span>
+      </div>
+
+      <div class="control">
+        <label for="seed">Seed (uint32)</label>
+        <input type="number" id="seed" min="0" max="4294967295" value="73213" />
+        <div class="value-row"><span>reproducible state id</span><span id="seedValue">73213</span></div>
+      </div>
+
+      <div class="actions">
+        <button id="randomizeButton" type="button">Randomize</button>
+        <button id="applySeedButton" class="secondary" type="button">Apply Seed</button>
+        <button id="resetViewButton" class="secondary" type="button">Reset View</button>
+        <button id="exportButton" type="button">Export PNG (2D + 3D)</button>
+        <span class="note">The 3D view stays fixed outside the apse. This morphology file now biases toward stepped ambulatory tiers, a stable chapel height band, and taller historical-style section profiles.</span>
+      </div>
+    </div>
+
+    <div class="views">
+      <div class="panel">
+        <h2>Plan 2D</h2>
+        <canvas id="planCanvas" width="760" height="560"></canvas>
+      </div>
+      <div class="panel">
+        <h2>3D Rib Web</h2>
+        <canvas id="view3dCanvas" width="760" height="560"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /** @typedef {{x:number, y:number}} Point2 */
+    /** @typedef {{x:number, y:number, z:number}} Point3 */
+    /** @typedef {{points:Point3[], shade:number, width:number, alpha:number, kind:string}} Curve3D */
+    /** @typedef {{p1:Point2, p2:Point2, level:number, kind:string}} Segment2 */
+
+    /**
+     * @typedef {Object} ApseParams
+     * @property {number} edges
+     * @property {number[]} sequence
+     * @property {number} apseSize
+     * @property {number} apseRatio
+     * @property {number} divisionThreshold
+     * @property {number} columnSize
+     * @property {number} chapelScale
+     * @property {number} heightScale
+     * @property {'full'|'single'} displayMode
+     * @property {number} seed
+     */
+
+    /**
+     * @typedef {Object} Ring2D
+     * @property {Point2[]} innerPoints
+     * @property {Point2[]} outerPoints
+     * @property {number} level
+     * @property {number} ringWidth
+     */
+
+    /**
+     * @typedef {Object} ChapelSegment2D
+     * @property {Point2} bottom1
+     * @property {Point2} bottom2
+     * @property {Point2} top1
+     * @property {Point2} top2
+     * @property {number} level
+     * @property {boolean} isTerminal
+     * @property {string} kind
+     */
+
+    /**
+     * @typedef {Object} Termination2D
+     * @property {Point2} p1
+     * @property {Point2} p2
+     * @property {Point2} center
+     * @property {number} radius
+     * @property {number} startAngle
+     * @property {number} endAngle
+     * @property {Point2[]} columnPoints
+     * @property {number} level
+     */
+
+    /**
+     * @typedef {Object} SupportAxis2D
+     * @property {Point2} anchor
+     * @property {Point2} pier
+     * @property {Point2[]} chainPoints
+     * @property {Point2} direction
+     * @property {number} seamIndex
+     * @property {number} axisFactor
+     */
+
+    /**
+     * @typedef {Object} Buttress2D
+     * @property {Point2} anchor
+     * @property {Point2} pier
+     * @property {number} seamIndex
+     * @property {number} axisFactor
+     */
+
+    /**
+     * @typedef {Object} CircleMarker
+     * @property {Point2} point
+     * @property {number} radius
+     * @property {number} level
+     * @property {string} kind
+     */
+
+    /**
+     * @typedef {Object} Geometry2D
+     * @property {Ring2D[]} rings
+     * @property {ChapelSegment2D[]} chapels
+     * @property {Termination2D[]} terminations
+     * @property {SupportAxis2D[]} supportAxes
+     * @property {Buttress2D[]} buttresses
+     * @property {CircleMarker[]} columns
+     * @property {Segment2[]} segments
+     * @property {{center:Point2, outerRadius:number, chapelSize:number, supportDepth:number, perimeterPolyline:Point2[], bounds:{minX:number,maxX:number,minY:number,maxY:number}}} meta
+     */
+
+    /**
+     * @typedef {Object} Mesh3D
+     * @property {Curve3D[]} curves
+     * @property {{minX:number,maxX:number,minY:number,maxY:number,minZ:number,maxZ:number}} bounds
+     */
+
+    const planCanvas = document.getElementById('planCanvas');
+    const view3dCanvas = document.getElementById('view3dCanvas');
+    const planCtx = planCanvas.getContext('2d');
+    const view3dCtx = view3dCanvas.getContext('2d');
+
+    const controls = {
+      edges: document.getElementById('edges'),
+      sequence: document.getElementById('sequence'),
+      apseSize: document.getElementById('apseSize'),
+      apseRatio: document.getElementById('apseRatio'),
+      divisionThreshold: document.getElementById('divisionThreshold'),
+     columnSize: document.getElementById('columnSize'),
+     chapelScale: document.getElementById('chapelScale'),
+     heightScale: document.getElementById('heightScale'),
+     displayMode: document.getElementById('displayMode'),
+      seed: document.getElementById('seed'),
+      randomizeButton: document.getElementById('randomizeButton'),
+      applySeedButton: document.getElementById('applySeedButton'),
+      resetViewButton: document.getElementById('resetViewButton'),
+      exportButton: document.getElementById('exportButton')
+    };
+
+    const labels = {
+      edges: document.getElementById('edgesValue'),
+      sequence: document.getElementById('sequenceValue'),
+      apseSize: document.getElementById('apseSizeValue'),
+      apseRatio: document.getElementById('apseRatioValue'),
+      divisionThreshold: document.getElementById('divisionThresholdValue'),
+      columnSize: document.getElementById('columnSizeValue'),
+      chapelScale: document.getElementById('chapelScaleValue'),
+      heightScale: document.getElementById('heightScaleValue'),
+      displayMode: document.getElementById('displayModeValue'),
+      seed: document.getElementById('seedValue')
+    };
+
+    const TAU = Math.PI * 2;
+    const FIXED_ISO_YAW = 135;
+    const FIXED_ISO_PITCH = 35.264389682754654;
+    const viewState = {
+      panX: 0,
+      panY: 0,
+      zoom: 1
+    };
+    const pointerState = {
+      active: false,
+      pointerId: null,
+      lastX: 0,
+      lastY: 0
+    };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    /**
+     * @param {string} input
+     * @returns {number[]}
+     */
+    function parseSequence(input) {
+      const parsed = String(input)
+        .split(',')
+        .map((n) => parseInt(n.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+
+      if (parsed.length === 0) {
+        return [1, 1, 1, 2, 3];
+      }
+
+      return parsed;
+    }
+
+    /**
+     * @param {number} seed
+     * @returns {() => number}
+     */
+    function mulberry32(seed) {
+      let state = seed >>> 0;
+      return function rand() {
+        state += 0x6D2B79F5;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    /**
+     * @returns {number}
+     */
+    function randomUint32() {
+      if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        const values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        return values[0] >>> 0;
+      }
+      return Math.floor(Math.random() * 4294967296) >>> 0;
+    }
+
+    /**
+     * @param {number} seed
+     * @param {ApseParams} currentParams
+     * @returns {Partial<ApseParams>}
+     */
+    function seededRandomize(seed, currentParams) {
+      const rand = mulberry32(seed >>> 0);
+      const bayCounts = [5, 7];
+      const sequenceLength = 5;
+
+      /**
+       * @param {Pick<ApseParams,'apseSize'|'apseRatio'|'divisionThreshold'|'sequence'>} params
+       * @returns {number}
+       */
+      function estimateAmbulatoryBands(params) {
+        let ringWidth = params.apseSize * params.apseRatio * 0.4;
+        let bands = 1;
+        for (let level = 0; level < params.sequence.length - 1; level++) {
+          if (ringWidth <= params.divisionThreshold) {
+            break;
+          }
+          const segmentCount = Math.max(1, params.sequence[level] || 1);
+          ringWidth *= 1 / (segmentCount + 1);
+          bands += 1;
+        }
+        return bands;
+      }
+
+      /**
+       * @param {Pick<ApseParams,'apseSize'|'apseRatio'|'divisionThreshold'|'sequence'>} params
+       * @returns {number}
+       */
+      function estimateChapelBands(params) {
+        let chapelLength = params.apseSize * (1 - params.apseRatio);
+        let bands = 1;
+        for (let level = 0; level < params.sequence.length - 1; level++) {
+          if (chapelLength <= params.divisionThreshold) {
+            break;
+          }
+          const segmentCount = Math.max(1, params.sequence[level] || 1);
+          chapelLength *= segmentCount / (segmentCount + 1);
+          bands += 1;
+        }
+        return bands;
+      }
+
+      /**
+       * @returns {number[]}
+       */
+      function buildSequence() {
+        const sequence = [];
+        for (let i = 0; i < sequenceLength; i++) {
+          const positionRatio = i / (sequenceLength - 1);
+          let weights = [
+            0.78 - 0.42 * positionRatio,
+            0.18 + 0.12 * positionRatio,
+            0.035 + 0.18 * positionRatio,
+            0.005 + 0.05 * positionRatio
+          ];
+          const total = weights.reduce((a, b) => a + b, 0);
+          weights = weights.map((w) => w / total);
+
+          let pick = rand();
+          let selected = 1;
+          for (let j = 0; j < weights.length; j++) {
+            pick -= weights[j];
+            if (pick <= 0) {
+              selected = j + 1;
+              break;
+            }
+          }
+          sequence.push(selected);
+        }
+        return sequence;
+      }
+
+      let bestCandidate = null;
+      let bestScore = Number.NEGATIVE_INFINITY;
+
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const randomEdges = bayCounts[Math.floor(rand() * bayCounts.length)];
+        const randomSequence = buildSequence();
+        const sequenceAverage = randomSequence.reduce((sum, value) => sum + value, 0) / Math.max(1, randomSequence.length);
+        const apseSize = Math.floor(rand() * 211) + 210;
+        const verticalBias = 0.58 + rand() * 0.42;
+        const denserPlan = randomEdges === 7;
+        const apseRatio = clamp(
+          (denserPlan ? 0.66 : 0.63) + verticalBias * 0.12 + rand() * 0.05 - (sequenceAverage - 1.55) * 0.015,
+          0.62,
+          0.84
+        );
+        const chapelDepth = apseSize * (1 - apseRatio);
+        const chapelScale = clamp(
+          0.86 + verticalBias * 0.08 + rand() * 0.14 - (sequenceAverage - 1.6) * 0.01,
+          0.82,
+          1.12
+        );
+        const thresholdBase = chapelDepth * (0.24 + rand() * 0.09) + sequenceAverage * 2.2;
+        const divisionThreshold = Math.round(clamp(thresholdBase, 16, Math.max(40, chapelDepth * 0.52)));
+        const heightScale = Math.round(clamp(210 + verticalBias * 340 + rand() * 110, 210, 680));
+
+        const candidate = {
+          ...currentParams,
+          edges: randomEdges,
+          sequence: randomSequence,
+          apseSize,
+          apseRatio,
+          divisionThreshold,
+          chapelScale,
+          heightScale,
+          seed
+        };
+
+        const ambulatoryBands = estimateAmbulatoryBands(candidate);
+        const chapelBands = estimateChapelBands(candidate);
+        const validAmbulatory = ambulatoryBands >= 2 && ambulatoryBands <= 5;
+        const validChapel = chapelBands >= 2 && chapelBands <= 5;
+        const countPenalty = Math.abs(Math.min(ambulatoryBands, 5) - 3.5) + Math.abs(Math.min(chapelBands, 5) - 4);
+        const chapelScalePenalty = Math.abs(chapelScale - 0.96);
+        const verticalScore =
+          heightScale * 0.01 +
+          apseRatio * 2.2 +
+          (0.24 - chapelScalePenalty) * 1.8 -
+          divisionThreshold * 0.012 -
+          countPenalty * 0.7;
+        const validityBonus = (validAmbulatory ? 2 : -3) + (validChapel ? 2 : -3);
+        const score = verticalScore + validityBonus;
+
+        if (validAmbulatory && validChapel && score > bestScore) {
+          bestCandidate = candidate;
+          bestScore = score;
+          continue;
+        }
+
+        if (!bestCandidate && score > bestScore) {
+          bestCandidate = candidate;
+          bestScore = score;
+        }
+      }
+
+      return bestCandidate || {
+        ...currentParams,
+        edges: 7,
+        sequence: [1, 1, 2, 2, 3],
+        apseSize: 280,
+        apseRatio: 0.72,
+        divisionThreshold: 75,
+        chapelScale: 0.92,
+        heightScale: 260,
+        seed
+      };
+    }
+
+    /**
+     * @param {Point2} p1
+     * @param {Point2} p2
+     * @returns {number}
+     */
+    function distance2D(p1, p2) {
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      return Math.hypot(dx, dy);
+    }
+
+    /**
+     * @param {Point2} p1
+     * @param {Point2} p2
+     * @param {number} ratio
+     * @returns {Point2}
+     */
+    function lerpPoint2D(p1, p2, ratio) {
+      return {
+        x: p1.x + (p2.x - p1.x) * ratio,
+        y: p1.y + (p2.y - p1.y) * ratio
+      };
+    }
+
+    /**
+     * @param {number} x
+     * @param {number} y
+     * @returns {Point2}
+     */
+    function normalize2D(x, y) {
+      const length = Math.hypot(x, y);
+      if (length < 1e-9) {
+        return { x: 0, y: -1 };
+      }
+      return { x: x / length, y: y / length };
+    }
+
+    /**
+     * @param {number} innerRadius
+     * @param {number} outerRadius
+     * @param {number} sides
+     * @param {number} [rotation]
+     * @returns {{innerPoints:Point2[], outerPoints:Point2[]}}
+     */
+    function generateRingPoints(innerRadius, outerRadius, sides, rotation = Math.PI) {
+      const innerPoints = [];
+      const outerPoints = [];
+
+      for (let i = 0; i <= sides; i++) {
+        const angle = rotation + (i * Math.PI) / sides;
+        innerPoints.push({ x: innerRadius * Math.cos(angle), y: innerRadius * Math.sin(angle) });
+        outerPoints.push({ x: outerRadius * Math.cos(angle), y: outerRadius * Math.sin(angle) });
+      }
+
+      return { innerPoints, outerPoints };
+    }
+
+    /**
+     * @param {ApseParams} params
+     * @returns {Geometry2D}
+     */
+    function generate2DGeometry(params) {
+      const rings = [];
+      const chapels = [];
+      const terminations = [];
+      const supportAxes = [];
+      const buttresses = [];
+      const columns = [];
+      const segments = [];
+
+      const bounds = {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY
+      };
+
+      /** @param {Point2} point */
+      function updateBounds(point) {
+        bounds.minX = Math.min(bounds.minX, point.x);
+        bounds.maxX = Math.max(bounds.maxX, point.x);
+        bounds.minY = Math.min(bounds.minY, point.y);
+        bounds.maxY = Math.max(bounds.maxY, point.y);
+      }
+
+      /**
+       * @param {Point2} point
+       * @param {number} radius
+       * @param {number} level
+       * @param {string} kind
+       */
+      function addColumn(point, radius, level, kind) {
+        columns.push({ point, radius, level, kind });
+        updateBounds({ x: point.x - radius, y: point.y - radius });
+        updateBounds({ x: point.x + radius, y: point.y + radius });
+      }
+
+      /**
+       * @param {number} innerRadius
+       * @param {number} outerRadius
+       * @param {number} level
+       */
+      function recurseAmbulatory(innerRadius, outerRadius, level) {
+        const ring = generateRingPoints(innerRadius, outerRadius, params.edges, Math.PI);
+        const ringWidth = outerRadius - innerRadius;
+        rings.push({ ...ring, level, ringWidth });
+
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          updateBounds(ring.innerPoints[i]);
+          updateBounds(ring.outerPoints[i]);
+        }
+
+        const sizeFactor = params.columnSize;
+        const arcLength = (Math.PI / params.edges) * Math.max(innerRadius, 1);
+        const columnRadius = Math.max(1.5, arcLength * sizeFactor * 0.3);
+
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          addColumn(ring.innerPoints[i], columnRadius, level, 'ring-inner');
+          addColumn(ring.outerPoints[i], columnRadius, level, 'ring-outer');
+        }
+
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          segments.push({ p1: ring.innerPoints[i], p2: ring.innerPoints[i + 1], level, kind: 'ring-inner-arc' });
+          segments.push({ p1: ring.outerPoints[i], p2: ring.outerPoints[i + 1], level, kind: 'ring-outer-arc' });
+          segments.push({ p1: ring.innerPoints[i], p2: ring.outerPoints[i], level, kind: 'ring-radial' });
+          segments.push({ p1: ring.innerPoints[i], p2: ring.outerPoints[i + 1], level, kind: 'ring-diagonal' });
+          segments.push({ p1: ring.outerPoints[i], p2: ring.innerPoints[i + 1], level, kind: 'ring-diagonal' });
+        }
+
+        const canRecurse = ringWidth > params.divisionThreshold && level < params.sequence.length - 1;
+        if (canRecurse) {
+          const segmentCount = params.sequence[level] || 1;
+          const segmentRatio = 1 / (segmentCount + 1);
+          const nextInnerRadius = outerRadius - ringWidth * segmentRatio;
+          recurseAmbulatory(nextInnerRadius, outerRadius, level + 1);
+        }
+      }
+
+      /**
+       * @param {Point2} p1
+       * @param {Point2} p2
+       * @param {number} level
+       */
+      function addTermination(p1, p2, level) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const length = Math.hypot(dx, dy);
+        const radius = length / 2;
+        const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        const angle = Math.atan2(dy, dx);
+        const startAngle = angle + Math.PI;
+        const endAngle = angle + TAU;
+
+        const numColumns = 5;
+        const columnPoints = [];
+        for (let i = 0; i < numColumns; i++) {
+          const t = i / (numColumns - 1);
+          const theta = startAngle + (endAngle - startAngle) * t;
+          const point = {
+            x: center.x + radius * Math.cos(theta),
+            y: center.y + radius * Math.sin(theta)
+          };
+          columnPoints.push(point);
+
+          const arcLength = Math.PI * radius;
+          const spacing = arcLength / Math.max(1, numColumns - 1);
+          const circleRadius = Math.max(1.2, spacing * params.columnSize * 0.3);
+          addColumn(point, circleRadius, level, 'termination');
+
+          segments.push({ p1: point, p2: center, level, kind: 'termination-radial' });
+        }
+
+        for (let i = 0; i <= 18; i++) {
+          const t = i / 18;
+          const theta = startAngle + (endAngle - startAngle) * t;
+          updateBounds({
+            x: center.x + radius * Math.cos(theta),
+            y: center.y + radius * Math.sin(theta)
+          });
+        }
+
+        terminations.push({
+          p1,
+          p2,
+          center,
+          radius,
+          startAngle,
+          endAngle,
+          columnPoints,
+          level
+        });
+      }
+
+      /**
+       * @param {Point2} p1
+       * @param {Point2} p2
+       * @param {number} chapelLength
+       * @param {number} level
+       */
+      function recurseChapel(p1, p2, chapelLength, level) {
+        const mid = lerpPoint2D(p1, p2, 0.5);
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const edgeLength = Math.hypot(dx, dy);
+
+        let normalX = -dy / Math.max(edgeLength, 1e-9);
+        let normalY = dx / Math.max(edgeLength, 1e-9);
+
+        const toCenter = { x: mid.x, y: mid.y };
+        const dot = normalX * toCenter.x + normalY * toCenter.y;
+        if (dot < 0) {
+          normalX = -normalX;
+          normalY = -normalY;
+        }
+
+        const scale = params.chapelScale;
+        const segmentCount = params.sequence[level] || 1;
+        const shouldSubdivide = chapelLength > params.divisionThreshold && level < params.sequence.length - 1;
+
+        const fullOffsetMid = { x: mid.x + normalX * chapelLength, y: mid.y + normalY * chapelLength };
+        const fullTop1 = {
+          x: fullOffsetMid.x + (p1.x - mid.x) * scale,
+          y: fullOffsetMid.y + (p1.y - mid.y) * scale
+        };
+        const fullTop2 = {
+          x: fullOffsetMid.x + (p2.x - mid.x) * scale,
+          y: fullOffsetMid.y + (p2.y - mid.y) * scale
+        };
+
+        if (!shouldSubdivide) {
+          const segment = {
+            bottom1: p1,
+            bottom2: p2,
+            top1: fullTop1,
+            top2: fullTop2,
+            level,
+            isTerminal: true,
+            kind: 'chapel'
+          };
+          chapels.push(segment);
+          addTermination(fullTop1, fullTop2, level + 1);
+
+          const bottomRadius = Math.max(1.5, edgeLength * params.columnSize * 0.15);
+          const topRadius = Math.max(1.5, distance2D(fullTop1, fullTop2) * params.columnSize * 0.15);
+          addColumn(p1, bottomRadius, level, 'chapel');
+          addColumn(p2, bottomRadius, level, 'chapel');
+          addColumn(fullTop1, topRadius, level, 'chapel');
+          addColumn(fullTop2, topRadius, level, 'chapel');
+
+          segments.push({ p1, p2, level, kind: 'chapel-bottom' });
+          segments.push({ p1: fullTop1, p2: fullTop2, level, kind: 'chapel-top' });
+          segments.push({ p1, p2: fullTop1, level, kind: 'chapel-side' });
+          segments.push({ p1: p2, p2: fullTop2, level, kind: 'chapel-side' });
+          segments.push({ p1, p2: fullTop2, level, kind: 'chapel-cross' });
+          segments.push({ p1: p2, p2: fullTop1, level, kind: 'chapel-cross' });
+
+          updateBounds(p1);
+          updateBounds(p2);
+          updateBounds(fullTop1);
+          updateBounds(fullTop2);
+          return;
+        }
+
+        const subdivisionRatio = 1 / (segmentCount + 1);
+        const currentLength = chapelLength * subdivisionRatio;
+        const remainingLength = chapelLength - currentLength;
+
+        const currentOffsetMid = { x: mid.x + normalX * currentLength, y: mid.y + normalY * currentLength };
+        const currentTop1 = {
+          x: currentOffsetMid.x + (p1.x - mid.x) * scale,
+          y: currentOffsetMid.y + (p1.y - mid.y) * scale
+        };
+        const currentTop2 = {
+          x: currentOffsetMid.x + (p2.x - mid.x) * scale,
+          y: currentOffsetMid.y + (p2.y - mid.y) * scale
+        };
+
+        chapels.push({
+          bottom1: p1,
+          bottom2: p2,
+          top1: currentTop1,
+          top2: currentTop2,
+          level,
+          isTerminal: false,
+          kind: 'chapel'
+        });
+
+        const bottomRadius = Math.max(1.5, edgeLength * params.columnSize * 0.15);
+        const topRadius = Math.max(1.5, distance2D(currentTop1, currentTop2) * params.columnSize * 0.15);
+        addColumn(p1, bottomRadius, level, 'chapel');
+        addColumn(p2, bottomRadius, level, 'chapel');
+        addColumn(currentTop1, topRadius, level, 'chapel');
+        addColumn(currentTop2, topRadius, level, 'chapel');
+
+        segments.push({ p1, p2, level, kind: 'chapel-bottom' });
+        segments.push({ p1: currentTop1, p2: currentTop2, level, kind: 'chapel-top' });
+        segments.push({ p1, p2: currentTop1, level, kind: 'chapel-side' });
+        segments.push({ p1: p2, p2: currentTop2, level, kind: 'chapel-side' });
+        segments.push({ p1, p2: currentTop2, level, kind: 'chapel-cross' });
+        segments.push({ p1: p2, p2: currentTop1, level, kind: 'chapel-cross' });
+
+        updateBounds(p1);
+        updateBounds(p2);
+        updateBounds(currentTop1);
+        updateBounds(currentTop2);
+
+        recurseChapel(currentTop1, currentTop2, remainingLength, level + 1);
+      }
+
+      const ambulatorySize = params.apseSize * params.apseRatio;
+      const chapelSize = params.apseSize * (1 - params.apseRatio);
+      const innerRadius = ambulatorySize * 0.6;
+      const supportDepth = Math.max(params.apseSize * 0.028, ambulatorySize * 0.07);
+
+      /**
+       * Buttresses are only allowed on actual ambulatory columns.
+       * The support chain then reuses interior ambulatory columns on the same radial index.
+       * @param {Ring2D} baseRing
+       */
+      function addSupportSystem(baseRing) {
+        if (!baseRing || baseRing.outerPoints.length < 3) {
+          return;
+        }
+
+        for (let i = 1; i < baseRing.outerPoints.length - 1; i++) {
+          const anchor = baseRing.outerPoints[i];
+          const direction = normalize2D(anchor.x, anchor.y);
+          const axisFactor = clamp(-anchor.y / Math.max(1, ambulatorySize), 0.18, 1);
+          const pier = {
+            x: anchor.x + direction.x * supportDepth,
+            y: anchor.y + direction.y * supportDepth
+          };
+          /** @type {Point2[]} */
+          const chainPoints = [];
+          for (const ring of rings) {
+            const point = ring.innerPoints[i];
+            if (!point) {
+              continue;
+            }
+            if (chainPoints.length === 0 || pointKey(chainPoints[chainPoints.length - 1]) !== pointKey(point)) {
+              chainPoints.push(point);
+            }
+          }
+          chainPoints.sort(
+            (left, right) => distance2D({ x: 0, y: 0 }, right) - distance2D({ x: 0, y: 0 }, left)
+          );
+          if (chainPoints.length === 0) {
+            continue;
+          }
+
+          buttresses.push({
+            anchor,
+            pier,
+            seamIndex: i,
+            axisFactor
+          });
+
+          const pierRadius = Math.max(1.4, params.apseSize * 0.008);
+          addColumn(pier, pierRadius, 0, 'buttress');
+          updateBounds(pier);
+
+          supportAxes.push({
+            anchor,
+            pier,
+            chainPoints,
+            direction,
+            seamIndex: i,
+            axisFactor
+          });
+        }
+      }
+
+      recurseAmbulatory(innerRadius, ambulatorySize, 0);
+
+      if (rings.length > 0) {
+        const baseRing = rings[0];
+        for (let i = 0; i < baseRing.outerPoints.length - 1; i++) {
+          recurseChapel(baseRing.outerPoints[i], baseRing.outerPoints[i + 1], chapelSize, 0);
+        }
+        addSupportSystem(baseRing);
+      }
+
+      if (!Number.isFinite(bounds.minX)) {
+        bounds.minX = -10;
+        bounds.maxX = 10;
+        bounds.minY = -10;
+        bounds.maxY = 10;
+      }
+
+      const perimeterPolyline = buildPerimeterPolyline2D({ rings, chapels, terminations });
+
+      return {
+        rings,
+        chapels,
+        terminations,
+        supportAxes,
+        buttresses,
+        columns,
+        segments,
+        meta: {
+          center: { x: 0, y: 0 },
+          outerRadius: ambulatorySize,
+          chapelSize,
+          supportDepth,
+          perimeterPolyline,
+          bounds
+        }
+      };
+    }
+
+    /**
+     * @param {Point2} a1
+     * @param {Point2} a2
+     * @param {Point2} b1
+     * @param {Point2} b2
+     * @returns {Point2}
+     */
+    function lineIntersection(a1, a2, b1, b2) {
+      const x1 = a1.x;
+      const y1 = a1.y;
+      const x2 = a2.x;
+      const y2 = a2.y;
+      const x3 = b1.x;
+      const y3 = b1.y;
+      const x4 = b2.x;
+      const y4 = b2.y;
+
+      const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+      if (Math.abs(denom) < 1e-9) {
+        return {
+          x: (x1 + x2 + x3 + x4) / 4,
+          y: (y1 + y2 + y3 + y4) / 4
+        };
+      }
+
+      const detA = x1 * y2 - y1 * x2;
+      const detB = x3 * y4 - y3 * x4;
+      return {
+        x: (detA * (x3 - x4) - (x1 - x2) * detB) / denom,
+        y: (detA * (y3 - y4) - (y1 - y2) * detB) / denom
+      };
+    }
+
+    /**
+     * @param {Point2} point
+     * @returns {string}
+     */
+    function pointKey(point) {
+      return `${point.x.toFixed(5)}|${point.y.toFixed(5)}`;
+    }
+
+    /**
+     * @param {Point2[]} points
+     * @param {Point2} point
+     */
+    function appendUniquePoint(points, point) {
+      if (points.length === 0 || pointKey(points[points.length - 1]) !== pointKey(point)) {
+        points.push(point);
+      }
+    }
+
+    /**
+     * @param {{rings:Ring2D[], chapels:ChapelSegment2D[], terminations:Termination2D[]}} geometry2D
+     * @returns {Point2[]}
+     */
+    function buildPerimeterPolyline2D(geometry2D) {
+      const perimeter = [];
+      const outerRing = geometry2D.rings[0];
+      if (!outerRing || outerRing.outerPoints.length < 2) {
+        return perimeter;
+      }
+
+      /** @type {Map<string, ChapelSegment2D>} */
+      const chapelByBase = new Map();
+      for (const chapel of geometry2D.chapels) {
+        chapelByBase.set(`${pointKey(chapel.bottom1)}>${pointKey(chapel.bottom2)}`, chapel);
+      }
+
+      /** @type {Map<string, Termination2D>} */
+      const terminationByTop = new Map();
+      for (const term of geometry2D.terminations) {
+        terminationByTop.set(`${pointKey(term.p1)}>${pointKey(term.p2)}`, term);
+      }
+
+      appendUniquePoint(perimeter, outerRing.outerPoints[0]);
+
+      for (let i = 0; i < outerRing.outerPoints.length - 1; i++) {
+        let start = outerRing.outerPoints[i];
+        let end = outerRing.outerPoints[i + 1];
+        /** @type {Point2[]} */
+        const leftChain = [];
+        /** @type {Point2[]} */
+        const rightChain = [];
+        /** @type {Termination2D | null} */
+        let termination = null;
+
+        for (let guard = 0; guard < 32; guard++) {
+          const chapel = chapelByBase.get(`${pointKey(start)}>${pointKey(end)}`);
+          if (!chapel) {
+            break;
+          }
+          leftChain.push(chapel.top1);
+          rightChain.push(chapel.top2);
+
+          if (chapel.isTerminal) {
+            termination = terminationByTop.get(`${pointKey(chapel.top1)}>${pointKey(chapel.top2)}`) || null;
+            break;
+          }
+
+          start = chapel.top1;
+          end = chapel.top2;
+        }
+
+        for (const point of leftChain) {
+          appendUniquePoint(perimeter, point);
+        }
+        if (termination) {
+          for (const point of termination.columnPoints) {
+            appendUniquePoint(perimeter, point);
+          }
+        }
+        for (const point of rightChain.slice().reverse()) {
+          appendUniquePoint(perimeter, point);
+        }
+        appendUniquePoint(perimeter, outerRing.outerPoints[i + 1]);
+      }
+
+      return perimeter;
+    }
+
+    /**
+     * @param {Geometry2D} geometry2D
+     * @returns {{minX:number,maxX:number,minY:number,maxY:number}}
+     */
+    function computeGeometryBounds(geometry2D) {
+      const bounds = {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY
+      };
+
+      /**
+       * @param {Point2} point
+       * @param {number} [pad]
+       */
+      function include(point, pad = 0) {
+        bounds.minX = Math.min(bounds.minX, point.x - pad);
+        bounds.maxX = Math.max(bounds.maxX, point.x + pad);
+        bounds.minY = Math.min(bounds.minY, point.y - pad);
+        bounds.maxY = Math.max(bounds.maxY, point.y + pad);
+      }
+
+      for (const ring of geometry2D.rings) {
+        for (const point of ring.innerPoints) {
+          include(point);
+        }
+        for (const point of ring.outerPoints) {
+          include(point);
+        }
+      }
+
+      for (const chapel of geometry2D.chapels) {
+        include(chapel.bottom1);
+        include(chapel.bottom2);
+        include(chapel.top1);
+        include(chapel.top2);
+      }
+
+      for (const term of geometry2D.terminations) {
+        for (let i = 0; i <= 18; i++) {
+          const t = i / 18;
+          const theta = term.startAngle + (term.endAngle - term.startAngle) * t;
+          include({
+            x: term.center.x + term.radius * Math.cos(theta),
+            y: term.center.y + term.radius * Math.sin(theta)
+          });
+        }
+      }
+
+      for (const axis of geometry2D.supportAxes) {
+        include(axis.anchor);
+        include(axis.pier);
+        for (const point of axis.chainPoints) {
+          include(point);
+        }
+      }
+
+      for (const point of geometry2D.meta.perimeterPolyline) {
+        include(point);
+      }
+
+      for (const col of geometry2D.columns) {
+        include(col.point, col.radius);
+      }
+
+      if (!Number.isFinite(bounds.minX)) {
+        return { ...geometry2D.meta.bounds };
+      }
+
+      return bounds;
+    }
+
+    /**
+     * @param {Geometry2D} geometry2D
+     * @param {ApseParams} params
+     * @returns {Geometry2D}
+     */
+    function filterGeometryForDisplay(geometry2D, params) {
+      if (params.displayMode !== 'single') {
+        return geometry2D;
+      }
+
+      const baseRing = geometry2D.rings[0];
+      if (!baseRing || baseRing.outerPoints.length < 2) {
+        return geometry2D;
+      }
+
+      const bayIndex = Math.floor((baseRing.outerPoints.length - 2) / 2);
+      const rings = geometry2D.rings.map((ring) => ({
+        ...ring,
+        innerPoints: [ring.innerPoints[bayIndex], ring.innerPoints[bayIndex + 1]].filter(Boolean),
+        outerPoints: [ring.outerPoints[bayIndex], ring.outerPoints[bayIndex + 1]].filter(Boolean)
+      }));
+
+      /** @type {Map<string, ChapelSegment2D>} */
+      const chapelByBase = new Map();
+      for (const chapel of geometry2D.chapels) {
+        chapelByBase.set(`${pointKey(chapel.bottom1)}>${pointKey(chapel.bottom2)}`, chapel);
+      }
+
+      /** @type {Map<string, Termination2D>} */
+      const terminationByTop = new Map();
+      for (const term of geometry2D.terminations) {
+        terminationByTop.set(`${pointKey(term.p1)}>${pointKey(term.p2)}`, term);
+      }
+
+      /** @type {ChapelSegment2D[]} */
+      const chapels = [];
+      /** @type {Termination2D[]} */
+      const terminations = [];
+      let start = baseRing.outerPoints[bayIndex];
+      let end = baseRing.outerPoints[bayIndex + 1];
+      for (let guard = 0; guard < 32; guard++) {
+        const chapel = chapelByBase.get(`${pointKey(start)}>${pointKey(end)}`);
+        if (!chapel) {
+          break;
+        }
+        chapels.push(chapel);
+        if (chapel.isTerminal) {
+          const term = terminationByTop.get(`${pointKey(chapel.top1)}>${pointKey(chapel.top2)}`);
+          if (term) {
+            terminations.push(term);
+          }
+          break;
+        }
+        start = chapel.top1;
+        end = chapel.top2;
+      }
+
+      const supportIndices = new Set([bayIndex, bayIndex + 1]);
+      const supportAxes = geometry2D.supportAxes.filter((axis) => supportIndices.has(axis.seamIndex));
+      const buttresses = geometry2D.buttresses.filter((buttress) => supportIndices.has(buttress.seamIndex));
+
+      const visiblePoints = new Set();
+      /**
+       * @param {Point2} point
+       */
+      function markPoint(point) {
+        visiblePoints.add(pointKey(point));
+      }
+
+      for (const ring of rings) {
+        for (const point of ring.innerPoints) {
+          markPoint(point);
+        }
+        for (const point of ring.outerPoints) {
+          markPoint(point);
+        }
+      }
+      for (const chapel of chapels) {
+        markPoint(chapel.bottom1);
+        markPoint(chapel.bottom2);
+        markPoint(chapel.top1);
+        markPoint(chapel.top2);
+      }
+      for (const term of terminations) {
+        markPoint(term.p1);
+        markPoint(term.p2);
+        markPoint(term.center);
+        for (const point of term.columnPoints) {
+          markPoint(point);
+        }
+      }
+      for (const axis of supportAxes) {
+        markPoint(axis.anchor);
+        markPoint(axis.pier);
+        for (const point of axis.chainPoints) {
+          markPoint(point);
+        }
+      }
+      for (const buttress of buttresses) {
+        markPoint(buttress.anchor);
+        markPoint(buttress.pier);
+      }
+
+      const columns = geometry2D.columns.filter((column) => visiblePoints.has(pointKey(column.point)));
+      const segments = geometry2D.segments.filter(
+        (segment) => visiblePoints.has(pointKey(segment.p1)) && visiblePoints.has(pointKey(segment.p2))
+      );
+      const perimeterPolyline = buildPerimeterPolyline2D({ rings, chapels, terminations });
+      const filteredGeometry = {
+        ...geometry2D,
+        rings,
+        chapels,
+        terminations,
+        supportAxes,
+        buttresses,
+        columns,
+        segments,
+        meta: {
+          ...geometry2D.meta,
+          perimeterPolyline,
+          bounds: geometry2D.meta.bounds
+        }
+      };
+      filteredGeometry.meta.bounds = computeGeometryBounds(filteredGeometry);
+      return filteredGeometry;
+    }
+
+    /**
+     * @param {Geometry2D} geometry2D
+     * @param {ApseParams} params
+     * @returns {Mesh3D}
+     */
+    function build3DRibNetwork(geometry2D, params) {
+      /** @type {Curve3D[]} */
+      const curves = [];
+      const heightBase = params.heightScale;
+      const outerRadius = Math.max(geometry2D.meta.outerRadius, 1);
+      const supportSpan = Math.max(outerRadius + geometry2D.meta.supportDepth * 0.6, 1);
+
+      /**
+       * @param {Point2} point
+       * @param {number} y
+       * @returns {Point3}
+       */
+      function to3D(point, y) {
+        return {
+          x: point.x,
+          y,
+          z: point.y
+        };
+      }
+
+      /**
+       * @param {Point3} p0
+       * @param {Point3} p1
+       * @param {Point3} p2
+       * @param {Point3} p3
+       * @param {number} t
+       * @returns {Point3}
+       */
+      function cubicPoint(p0, p1, p2, p3, t) {
+        const inv = 1 - t;
+        return {
+          x: inv * inv * inv * p0.x + 3 * inv * inv * t * p1.x + 3 * inv * t * t * p2.x + t * t * t * p3.x,
+          y: inv * inv * inv * p0.y + 3 * inv * inv * t * p1.y + 3 * inv * t * t * p2.y + t * t * t * p3.y,
+          z: inv * inv * inv * p0.z + 3 * inv * inv * t * p1.z + 3 * inv * t * t * p2.z + t * t * t * p3.z
+        };
+      }
+
+      /**
+       * @param {Point3[]} points
+       * @param {number} shade
+       * @param {number} width
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addCurve(points, shade, width, alpha, kind) {
+        if (points.length < 2) {
+          return;
+        }
+        curves.push({ points, shade, width, alpha, kind });
+      }
+
+      /**
+       * @param {Point2[]} points
+       * @param {number} height
+       * @param {number} shade
+       * @param {number} width
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addPlanLoop(points, height, shade, width, alpha, kind) {
+        if (points.length < 2) {
+          return;
+        }
+        const closed = points.map((point) => to3D(point, height));
+        closed.push(to3D(points[0], height));
+        addCurve(closed, shade, width, alpha, kind);
+      }
+
+      /**
+       * @param {Point2} point
+       * @param {number} height
+       * @param {number} shade
+       * @param {number} width
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addStem(point, height, shade, width, alpha, kind) {
+        addCurve([to3D(point, 0), to3D(point, height)], shade, width, alpha, kind);
+      }
+
+      /**
+       * @param {Point2} startPoint
+       * @param {Point2} endPoint
+       * @param {number} startHeight
+       * @param {number} endHeight
+       * @param {number} shade
+       * @param {number} width
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addPointedRib(startPoint, endPoint, startHeight, endHeight, shade, width, alpha, kind) {
+        const start = to3D(startPoint, startHeight);
+        const end = to3D(endPoint, endHeight);
+        const control1 = {
+          x: start.x + (end.x - start.x) * 0.05,
+          y: start.y + (end.y - start.y) * 0.42,
+          z: start.z + (end.z - start.z) * 0.05
+        };
+        const control2 = {
+          x: start.x + (end.x - start.x) * 0.62,
+          y: start.y + (end.y - start.y) * 0.94,
+          z: start.z + (end.z - start.z) * 0.62
+        };
+
+        const points = [];
+        const steps = 16;
+        for (let i = 0; i <= steps; i++) {
+          points.push(cubicPoint(start, control1, control2, end, i / steps));
+        }
+        addCurve(points, shade, width, alpha, kind);
+      }
+
+      /**
+       * @param {Point2[]} points
+       * @returns {Point2}
+       */
+      function averagePoint(points) {
+        if (points.length === 0) {
+          return { x: 0, y: 0 };
+        }
+        const sum = points.reduce(
+          (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
+          { x: 0, y: 0 }
+        );
+        return {
+          x: sum.x / points.length,
+          y: sum.y / points.length
+        };
+      }
+
+      const heightNorm = clamp((params.heightScale - 60) / 700, 0, 1);
+      const orderedRings = [...geometry2D.rings].sort((left, right) => {
+        const leftRadius = averagePoint([...left.innerPoints, ...left.outerPoints]);
+        const rightRadius = averagePoint([...right.innerPoints, ...right.outerPoints]);
+        return distance2D(geometry2D.meta.center, leftRadius) - distance2D(geometry2D.meta.center, rightRadius);
+      });
+      const ambulatoryTierCount = Math.max(1, orderedRings.length);
+      const ringStepsFromOuter = new Map();
+      orderedRings.forEach((ring, index) => {
+        ringStepsFromOuter.set(ring.level, ambulatoryTierCount - index);
+      });
+      const outerAmbulatoryCrown = heightBase * (0.4 + heightNorm * 0.11);
+      const ambulatoryStep = heightBase * (0.085 + heightNorm * 0.1);
+      const centerBonus = heightBase * (0.14 + heightNorm * 0.14);
+      const centralSpringGap = heightBase * (0.19 + heightNorm * 0.03);
+      const ambulatorySpringGap = heightBase * (0.16 + heightNorm * 0.02);
+      const chapelSpringGap = heightBase * (0.13 + heightNorm * 0.02);
+      const terminationSpringGap = heightBase * (0.12 + heightNorm * 0.02);
+      const axialBoostMax = heightBase * (0.02 + heightNorm * 0.04);
+
+      /**
+       * @param {number} crown
+       * @param {number} springGap
+       * @returns {{spring:number, crown:number}}
+       */
+      function buildHeightPair(crown, springGap) {
+        return {
+          spring: Math.max(heightBase * 0.12, crown - springGap),
+          crown
+        };
+      }
+
+      /**
+       * @param {Point2} point
+       * @param {number} emphasis
+       * @returns {number}
+       */
+      function axialBoost(point, emphasis) {
+        return axialFactor(point) * axialBoostMax * emphasis;
+      }
+
+      /**
+       * @param {Point2} point
+       * @returns {number}
+       */
+      function axialFactor(point) {
+        return clamp(-point.y / outerRadius, 0, 1);
+      }
+
+      /**
+       * @param {Point2} point
+       * @returns {number}
+       */
+      function radialFactor(point) {
+        return clamp(distance2D(geometry2D.meta.center, point) / supportSpan, 0, 1);
+      }
+
+      /**
+       * @param {Point2} point
+       * @param {number} level
+       * @param {'central'|'ring'|'chapel'|'termination'|'support'} family
+       * @returns {{spring:number, crown:number}}
+       */
+      function sectionHeights(point, level, family) {
+        if (family === 'central') {
+          const crown =
+            outerAmbulatoryCrown +
+            (ambulatoryTierCount + 1) * ambulatoryStep +
+            centerBonus +
+            axialBoost(point, 1.2);
+          return buildHeightPair(crown, centralSpringGap);
+        }
+
+        if (family === 'ring') {
+          const stepsFromOuter = clamp(level, 1, ambulatoryTierCount);
+          const crown =
+            outerAmbulatoryCrown +
+            stepsFromOuter * ambulatoryStep +
+            axialBoost(point, 0.55 + (stepsFromOuter / Math.max(1, ambulatoryTierCount)) * 0.18);
+          return buildHeightPair(crown, ambulatorySpringGap);
+        }
+
+        if (family === 'chapel') {
+          const crown = outerAmbulatoryCrown;
+          return buildHeightPair(crown, chapelSpringGap);
+        }
+
+        if (family === 'termination') {
+          const crown = outerAmbulatoryCrown - heightBase * 0.04;
+          return buildHeightPair(crown, terminationSpringGap);
+        }
+
+        const crown = outerAmbulatoryCrown + heightBase * 0.08 + axialBoost(point, 0.22);
+        return buildHeightPair(crown, ambulatorySpringGap);
+      }
+
+      /**
+       * @param {Point2[]} corners
+       * @param {{spring:number, crown:number}} heights
+       * @param {number} shade
+       * @param {string} kind
+       */
+      function addCrossVaultBay(corners, heights, shade, kind) {
+        if (corners.length !== 4) {
+          return;
+        }
+
+        const center = lineIntersection(corners[0], corners[2], corners[1], corners[3]);
+        for (const corner of corners) {
+          addStem(corner, heights.spring, 0.2, 1.05, 0.78, `${kind}-stem`);
+          addPointedRib(corner, center, heights.spring, heights.crown, shade, 1.04, 0.88, `${kind}-rib`);
+        }
+      }
+
+      /**
+       * @param {Point2[]} points
+       * @param {Point2} center
+       * @param {{spring:number, crown:number}} heights
+       * @param {number} shade
+       * @param {string} kind
+       */
+      function addFanBay(points, center, heights, shade, kind) {
+        for (const point of points) {
+          addStem(point, heights.spring, 0.2, 0.92, 0.72, `${kind}-stem`);
+          addPointedRib(point, center, heights.spring, heights.crown, shade, 0.96, 0.84, `${kind}-rib`);
+        }
+      }
+
+      /**
+       * Chapel height should stay tied to its bay band, not to how far the chapel recursion protrudes.
+       * @param {ChapelSegment2D} chapel
+       * @returns {Point2}
+       */
+      function chapelReferencePoint(chapel) {
+        const midBottom = lerpPoint2D(chapel.bottom1, chapel.bottom2, 0.5);
+        const midTop = lerpPoint2D(chapel.top1, chapel.top2, 0.5);
+        return lerpPoint2D(midBottom, midTop, 0.22);
+      }
+
+      /**
+       * @param {Termination2D} term
+       * @returns {Point2}
+       */
+      function terminationReferencePoint(term) {
+        const chordMid = lerpPoint2D(term.p1, term.p2, 0.5);
+        return lerpPoint2D(chordMid, term.center, 0.26);
+      }
+
+      /**
+       * One true outer buttress supports a monotonic inward rise of ambulatory columns.
+       * @param {SupportAxis2D} axis
+       * @returns {{pierTop:number, pierArchHeight:number, columnHeights:number[], receiveHeights:number[], launchHeights:number[]}}
+       */
+      function supportCascadeHeights(axis) {
+        const nodes = [axis.anchor, ...axis.chainPoints];
+        const columnHeights = new Array(nodes.length);
+        const receiveHeights = new Array(nodes.length);
+        const launchHeights = new Array(nodes.length);
+        const supportRise = Math.max(heightBase * 0.04, ambulatoryStep * 0.52);
+        const launchGap = Math.max(heightBase * 0.035, ambulatoryStep * 0.3);
+
+        for (let i = 0; i < nodes.length; i++) {
+          const point = nodes[i];
+          const crown =
+            outerAmbulatoryCrown +
+            Math.min(i, ambulatoryTierCount) * ambulatoryStep +
+            axialBoost(point, 0.26 + i * 0.08);
+          columnHeights[i] = crown;
+        }
+
+        receiveHeights[0] = Math.min(columnHeights[0] * 0.72, Math.max(heightBase * 0.24, columnHeights[0] * 0.58));
+        launchHeights[0] = Math.min(columnHeights[0] * 0.84, receiveHeights[0] + launchGap);
+
+        for (let i = 1; i < nodes.length; i++) {
+          receiveHeights[i] = Math.min(
+            columnHeights[i] * 0.76,
+            Math.max(receiveHeights[i - 1] + supportRise, columnHeights[i - 1] + supportRise * 0.92)
+          );
+          launchHeights[i] = Math.min(
+            columnHeights[i] * 0.9,
+            Math.max(receiveHeights[i] + launchGap, launchHeights[i - 1] + supportRise)
+          );
+        }
+
+        const pierTop = Math.max(
+          heightBase * 0.18,
+          columnHeights[0] * 0.54
+        );
+        const pierArchHeight = Math.max(heightBase * 0.17, receiveHeights[0] * 0.8);
+
+        return {
+          pierTop,
+          pierArchHeight,
+          columnHeights,
+          receiveHeights,
+          launchHeights
+        };
+      }
+
+      const baseRing = geometry2D.rings[0];
+      if (baseRing && baseRing.innerPoints.length >= 2) {
+        const centralHeights = sectionHeights({ x: 0, y: -outerRadius * 0.46 }, 0, 'central');
+        addFanBay(
+          baseRing.innerPoints,
+          geometry2D.meta.center,
+          centralHeights,
+          0.66,
+          'central'
+        );
+        addPlanLoop(baseRing.innerPoints, 0, 0.42, 0.95, 0.46, 'bay-plan-central');
+        addPlanLoop(baseRing.innerPoints, centralHeights.spring, 0.22, 0.88, 0.26, 'tier-central');
+        for (const point of baseRing.innerPoints) {
+          addCurve(
+            [to3D(geometry2D.meta.center, 0), to3D(point, 0)],
+            0.42,
+            0.82,
+            0.42,
+            'bay-plan-central-radial'
+          );
+        }
+        const outerTierHeights = sectionHeights(averagePoint(baseRing.outerPoints), 0, 'chapel');
+        addPlanLoop(baseRing.outerPoints, outerTierHeights.spring, 0.16, 0.82, 0.22, 'tier-outer-ambulatory');
+      }
+
+      for (const ring of geometry2D.rings) {
+        const stepsFromOuter = ringStepsFromOuter.get(ring.level) || 1;
+        const tierLoopHeights = sectionHeights(averagePoint(ring.innerPoints), stepsFromOuter, 'ring');
+        addPlanLoop(ring.innerPoints, tierLoopHeights.spring, 0.18, 0.8, 0.24, `tier-ring-${ring.level}`);
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          const corners = [ring.innerPoints[i], ring.innerPoints[i + 1], ring.outerPoints[i + 1], ring.outerPoints[i]];
+          const heights = sectionHeights(averagePoint(corners), stepsFromOuter, 'ring');
+          addPlanLoop(
+            corners,
+            0,
+            0.44,
+            0.92,
+            0.42,
+            `bay-plan-ring-${ring.level}-${i}`
+          );
+          addCrossVaultBay(
+            corners,
+            heights,
+            0.56 - ring.level * 0.02,
+            `ring-${ring.level}-${i}`
+          );
+        }
+      }
+
+      for (const chapel of geometry2D.chapels) {
+        const heights = sectionHeights(chapelReferencePoint(chapel), chapel.level, 'chapel');
+        addPlanLoop(
+          [chapel.bottom1, chapel.bottom2, chapel.top2, chapel.top1],
+          0,
+          0.44,
+          0.92,
+          0.42,
+          `bay-plan-chapel-${chapel.level}`
+        );
+        addCrossVaultBay(
+          [chapel.bottom1, chapel.bottom2, chapel.top2, chapel.top1],
+          heights,
+          chapel.isTerminal ? 0.52 : 0.48,
+          `chapel-${chapel.level}`
+        );
+      }
+
+      for (const term of geometry2D.terminations) {
+        const heights = sectionHeights(terminationReferencePoint(term), term.level, 'termination');
+        addPlanLoop(
+          [term.p1, ...term.columnPoints.slice(1, -1), term.p2],
+          0,
+          0.44,
+          0.92,
+          0.4,
+          `bay-plan-termination-${term.level}`
+        );
+        addFanBay(term.columnPoints, term.center, heights, 0.44, `termination-${term.level}`);
+      }
+
+      for (const axis of geometry2D.supportAxes) {
+        const supportHeights = supportCascadeHeights(axis);
+        addStem(axis.pier, supportHeights.pierTop, 0.12, 1.22, 0.84, `buttress-pier-${axis.seamIndex}`);
+        const nodes = [axis.anchor, ...axis.chainPoints];
+        for (let i = 0; i < nodes.length; i++) {
+          addStem(
+            nodes[i],
+            supportHeights.columnHeights[i],
+            0.22,
+            i === 0 ? 0.94 : 0.82,
+            0.52,
+            `ambulatory-column-${axis.seamIndex}-${i}`
+          );
+        }
+        addPointedRib(
+          axis.pier,
+          axis.anchor,
+          supportHeights.pierArchHeight,
+          supportHeights.receiveHeights[0],
+          0.2 + axis.axisFactor * 0.1,
+          1.08,
+          0.84,
+          `buttress-arch-${axis.seamIndex}-anchor`
+        );
+
+        for (let i = 0; i < axis.chainPoints.length; i++) {
+          const startPoint = nodes[i];
+          const endPoint = nodes[i + 1];
+          const startHeight = supportHeights.launchHeights[i];
+          const endHeight = supportHeights.receiveHeights[i + 1];
+          addPointedRib(
+            startPoint,
+            endPoint,
+            startHeight,
+            endHeight,
+            0.2 + axis.axisFactor * 0.1,
+            1.06,
+            0.82,
+            `buttress-arch-${axis.seamIndex}-${i}`
+          );
+        }
+      }
+
+      const perimeterPolyline = geometry2D.meta.perimeterPolyline;
+      if (perimeterPolyline.length >= 2) {
+        addCurve(
+          perimeterPolyline.map((point) => to3D(point, 0)),
+          0.05,
+          2.85,
+          0.98,
+          'perimeter'
+        );
+      }
+
+      const bounds = {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY,
+        minZ: Number.POSITIVE_INFINITY,
+        maxZ: Number.NEGATIVE_INFINITY
+      };
+
+      for (const curve of curves) {
+        for (const point of curve.points) {
+          bounds.minX = Math.min(bounds.minX, point.x);
+          bounds.maxX = Math.max(bounds.maxX, point.x);
+          bounds.minY = Math.min(bounds.minY, point.y);
+          bounds.maxY = Math.max(bounds.maxY, point.y);
+          bounds.minZ = Math.min(bounds.minZ, point.z);
+          bounds.maxZ = Math.max(bounds.maxZ, point.z);
+        }
+      }
+
+      if (!Number.isFinite(bounds.minX)) {
+        bounds.minX = bounds.minY = bounds.minZ = -1;
+        bounds.maxX = bounds.maxY = bounds.maxZ = 1;
+      }
+
+      return { curves, bounds };
+    }
+
+    /**
+     * @param {Geometry2D} geometry2D
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {ApseParams} params
+     */
+    function render2D(geometry2D, ctx, params) {
+      const width = ctx.canvas.width;
+      const height = ctx.canvas.height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      const b = geometry2D.meta.bounds;
+      const pad = 24;
+      const spanX = Math.max(1, b.maxX - b.minX);
+      const spanY = Math.max(1, b.maxY - b.minY);
+      const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+      const tx = (width - (b.minX + b.maxX) * scale) / 2;
+      const ty = (height - (b.minY + b.maxY) * scale) / 2;
+
+      ctx.setTransform(scale, 0, 0, scale, tx, ty);
+      const thin = 1.4 / scale;
+
+      for (const ring of geometry2D.rings) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = thin;
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          ctx.moveTo(0, 0);
+          ctx.lineTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          ctx.moveTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+          ctx.lineTo(ring.innerPoints[i + 1].x, ring.innerPoints[i + 1].y);
+          ctx.moveTo(ring.outerPoints[i].x, ring.outerPoints[i].y);
+          ctx.lineTo(ring.outerPoints[i + 1].x, ring.outerPoints[i + 1].y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (let i = 0; i < ring.innerPoints.length; i++) {
+          ctx.moveTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+          ctx.lineTo(ring.outerPoints[i].x, ring.outerPoints[i].y);
+        }
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (let i = 0; i < ring.innerPoints.length - 1; i++) {
+          ctx.moveTo(ring.innerPoints[i].x, ring.innerPoints[i].y);
+          ctx.lineTo(ring.outerPoints[i + 1].x, ring.outerPoints[i + 1].y);
+          ctx.moveTo(ring.outerPoints[i].x, ring.outerPoints[i].y);
+          ctx.lineTo(ring.innerPoints[i + 1].x, ring.innerPoints[i + 1].y);
+        }
+        ctx.stroke();
+      }
+
+      for (const chapel of geometry2D.chapels) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = thin;
+        ctx.moveTo(chapel.bottom1.x, chapel.bottom1.y);
+        ctx.lineTo(chapel.bottom2.x, chapel.bottom2.y);
+        ctx.moveTo(chapel.top1.x, chapel.top1.y);
+        ctx.lineTo(chapel.top2.x, chapel.top2.y);
+        ctx.moveTo(chapel.bottom1.x, chapel.bottom1.y);
+        ctx.lineTo(chapel.top2.x, chapel.top2.y);
+        ctx.moveTo(chapel.bottom2.x, chapel.bottom2.y);
+        ctx.lineTo(chapel.top1.x, chapel.top1.y);
+        ctx.stroke();
+      }
+
+      for (const term of geometry2D.terminations) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = thin;
+        ctx.arc(term.center.x, term.center.y, term.radius, term.startAngle, term.endAngle);
+        ctx.stroke();
+
+        ctx.beginPath();
+        for (const p of term.columnPoints) {
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(term.center.x, term.center.y);
+        }
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#7a7a7a';
+      ctx.lineWidth = thin * 0.82;
+      for (const axis of geometry2D.supportAxes) {
+        ctx.beginPath();
+        ctx.moveTo(axis.anchor.x, axis.anchor.y);
+        for (const point of axis.chainPoints.slice().reverse()) {
+          ctx.lineTo(point.x, point.y);
+        }
+        ctx.stroke();
+      }
+
+      const perimeterPolyline = geometry2D.meta.perimeterPolyline;
+      if (perimeterPolyline.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(perimeterPolyline[0].x, perimeterPolyline[0].y);
+        for (let i = 1; i < perimeterPolyline.length; i++) {
+          ctx.lineTo(perimeterPolyline[i].x, perimeterPolyline[i].y);
+        }
+        ctx.strokeStyle = '#151515';
+        ctx.lineWidth = thin * 2.2;
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#202020';
+      ctx.lineWidth = thin * 1.95;
+      for (const buttress of geometry2D.buttresses) {
+        ctx.beginPath();
+        ctx.moveTo(buttress.anchor.x, buttress.anchor.y);
+        ctx.lineTo(buttress.pier.x, buttress.pier.y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#111';
+      for (const col of geometry2D.columns) {
+        ctx.beginPath();
+        ctx.arc(col.point.x, col.point.y, col.radius, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    /**
+     * @param {Point3} point
+     * @param {number} yawRad
+     * @param {number} pitchRad
+     * @returns {{x:number,y:number,z:number}}
+     */
+    function rotateForCamera(point, yawRad, pitchRad) {
+      const cy = Math.cos(yawRad);
+      const sy = Math.sin(yawRad);
+      const x1 = point.x * cy - point.z * sy;
+      const z1 = point.x * sy + point.z * cy;
+
+      const ct = Math.cos(pitchRad);
+      const st = Math.sin(pitchRad);
+      const y1 = point.y * ct - z1 * st;
+      const z2 = point.y * st + z1 * ct;
+
+      return { x: x1, y: y1, z: z2 };
+    }
+
+    /**
+     * @param {Mesh3D} mesh3D
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {ApseParams} params
+     */
+    function render3D(mesh3D, ctx, params) {
+      const width = ctx.canvas.width;
+      const height = ctx.canvas.height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      const yawRad = (FIXED_ISO_YAW * Math.PI) / 180;
+      const pitchRad = (FIXED_ISO_PITCH * Math.PI) / 180;
+      const transformed = [];
+      const projectedBounds = {
+        minX: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY
+      };
+
+      for (const curve of mesh3D.curves) {
+        const points = curve.points.map((point) => {
+          const rotated = rotateForCamera(point, yawRad, pitchRad);
+          return { x: rotated.x, y: -rotated.y, z: rotated.z };
+        });
+
+        for (const point of points) {
+          projectedBounds.minX = Math.min(projectedBounds.minX, point.x);
+          projectedBounds.maxX = Math.max(projectedBounds.maxX, point.x);
+          projectedBounds.minY = Math.min(projectedBounds.minY, point.y);
+          projectedBounds.maxY = Math.max(projectedBounds.maxY, point.y);
+        }
+
+        const depth = points.reduce((sum, point) => sum + point.z, 0) / Math.max(1, points.length);
+        transformed.push({
+          points,
+          shade: curve.shade,
+          width: curve.width,
+          alpha: curve.alpha,
+          kind: curve.kind,
+          depth
+        });
+      }
+
+      if (transformed.length === 0) {
+        return;
+      }
+
+      const pad = 28;
+      const spanX = Math.max(1, projectedBounds.maxX - projectedBounds.minX);
+      const spanY = Math.max(1, projectedBounds.maxY - projectedBounds.minY);
+      const fitScale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+      const scale = fitScale * viewState.zoom;
+      const midX = (projectedBounds.minX + projectedBounds.maxX) / 2;
+      const midY = (projectedBounds.minY + projectedBounds.maxY) / 2;
+      const tx = width / 2 - midX * scale + viewState.panX;
+      const ty = height / 2 - midY * scale + viewState.panY;
+
+      transformed.sort((m, n) => {
+        const perimeterDelta = Number(m.kind === 'perimeter') - Number(n.kind === 'perimeter');
+        if (perimeterDelta !== 0) {
+          return perimeterDelta;
+        }
+        return m.depth - n.depth;
+      });
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      for (const curve of transformed) {
+        const gray = Math.round(18 + clamp(curve.shade, 0, 1) * 92);
+        const widthPx = clamp(curve.width * Math.max(0.7, scale * 0.01), 0.9, 3.4);
+        ctx.beginPath();
+        ctx.moveTo(curve.points[0].x * scale + tx, curve.points[0].y * scale + ty);
+        for (let i = 1; i < curve.points.length; i++) {
+          ctx.lineTo(curve.points[i].x * scale + tx, curve.points[i].y * scale + ty);
+        }
+        ctx.strokeStyle = `rgba(${gray}, ${gray}, ${gray}, ${clamp(curve.alpha, 0.42, 0.96)})`;
+        ctx.lineWidth = widthPx;
+        ctx.stroke();
+      }
+    }
+
+    /** @returns {ApseParams} */
+    function readParams() {
+      const edgeValue = parseInt(controls.edges.value, 10);
+      return {
+        edges: edgeValue <= 6 ? 5 : 7,
+        sequence: parseSequence(controls.sequence.value),
+        apseSize: parseInt(controls.apseSize.value, 10),
+        apseRatio: parseInt(controls.apseRatio.value, 10) / 100,
+        divisionThreshold: parseInt(controls.divisionThreshold.value, 10),
+        columnSize: parseInt(controls.columnSize.value, 10) / 100,
+        chapelScale: parseInt(controls.chapelScale.value, 10) / 100,
+        heightScale: parseInt(controls.heightScale.value, 10),
+        displayMode: controls.displayMode.value === 'single' ? 'single' : 'full',
+        seed: (parseInt(controls.seed.value, 10) >>> 0) || 0
+      };
+    }
+
+    /**
+     * @param {Partial<ApseParams>} params
+     */
+    function setControlsFromParams(params) {
+      if (typeof params.edges === 'number') {
+        controls.edges.value = String(params.edges <= 6 ? 5 : 7);
+      }
+      if (Array.isArray(params.sequence)) {
+        controls.sequence.value = params.sequence.join(',');
+      }
+      if (typeof params.apseSize === 'number') {
+        controls.apseSize.value = String(params.apseSize);
+      }
+      if (typeof params.apseRatio === 'number') {
+        controls.apseRatio.value = String(Math.round(params.apseRatio * 100));
+      }
+      if (typeof params.divisionThreshold === 'number') {
+        controls.divisionThreshold.value = String(params.divisionThreshold);
+      }
+      if (typeof params.columnSize === 'number') {
+        controls.columnSize.value = String(Math.round(params.columnSize * 100));
+      }
+      if (typeof params.chapelScale === 'number') {
+        controls.chapelScale.value = String(Math.round(params.chapelScale * 100));
+      }
+      if (typeof params.heightScale === 'number') {
+        controls.heightScale.value = String(Math.round(params.heightScale));
+      }
+      if (params.displayMode === 'single' || params.displayMode === 'full') {
+        controls.displayMode.value = params.displayMode;
+      }
+      if (typeof params.seed === 'number') {
+        controls.seed.value = String(params.seed >>> 0);
+      }
+    }
+
+    /**
+     * @param {ApseParams} params
+     */
+    function syncLabels(params) {
+      labels.edges.textContent = String(params.edges);
+      labels.sequence.textContent = `${params.sequence.length} terms`;
+      labels.apseSize.textContent = String(params.apseSize);
+      labels.apseRatio.textContent = params.apseRatio.toFixed(2);
+      labels.divisionThreshold.textContent = String(params.divisionThreshold);
+      labels.columnSize.textContent = params.columnSize.toFixed(2);
+      labels.chapelScale.textContent = params.chapelScale.toFixed(2);
+      labels.heightScale.textContent = String(params.heightScale);
+      labels.displayMode.textContent = params.displayMode === 'single' ? 'Single bay' : 'Full radial bay';
+      labels.seed.textContent = String(params.seed >>> 0);
+    }
+
+    function redraw() {
+      const params = readParams();
+      syncLabels(params);
+      const fullGeometry = generate2DGeometry(params);
+      const geometry2D = filterGeometryForDisplay(fullGeometry, params);
+      const mesh3D = build3DRibNetwork(geometry2D, params);
+      render2D(geometry2D, planCtx, params);
+      render3D(mesh3D, view3dCtx, params);
+    }
+
+    function applySeedParams() {
+      const params = readParams();
+      const randomized = seededRandomize(params.seed, params);
+      setControlsFromParams(randomized);
+      redraw();
+    }
+
+    function applyRandomizedParams() {
+      controls.seed.value = String(randomUint32());
+      applySeedParams();
+    }
+
+    function exportViews() {
+      const seed = (parseInt(controls.seed.value, 10) >>> 0) || 0;
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+
+      const gap = 14;
+      const out = document.createElement('canvas');
+      out.width = planCanvas.width + view3dCanvas.width + gap;
+      out.height = Math.max(planCanvas.height, view3dCanvas.height);
+      const outCtx = out.getContext('2d');
+
+      outCtx.fillStyle = '#fff';
+      outCtx.fillRect(0, 0, out.width, out.height);
+      outCtx.drawImage(planCanvas, 0, 0);
+      outCtx.drawImage(view3dCanvas, planCanvas.width + gap, 0);
+
+      const link = document.createElement('a');
+      link.href = out.toDataURL('image/png');
+      link.download = `apse_morphology_seed-${seed}_${timestamp}.png`;
+      link.click();
+    }
+
+    function resetView3D() {
+      viewState.panX = 0;
+      viewState.panY = 0;
+      viewState.zoom = 1;
+    }
+
+    /**
+     * @param {PointerEvent} event
+     */
+    function on3DPointerDown(event) {
+      pointerState.active = true;
+      pointerState.pointerId = event.pointerId;
+      pointerState.lastX = event.clientX;
+      pointerState.lastY = event.clientY;
+      view3dCanvas.setPointerCapture(event.pointerId);
+    }
+
+    /**
+     * @param {PointerEvent} event
+     */
+    function on3DPointerMove(event) {
+      if (!pointerState.active || event.pointerId !== pointerState.pointerId) {
+        return;
+      }
+
+      const dx = event.clientX - pointerState.lastX;
+      const dy = event.clientY - pointerState.lastY;
+      pointerState.lastX = event.clientX;
+      pointerState.lastY = event.clientY;
+
+      viewState.panX += dx;
+      viewState.panY += dy;
+      redraw();
+    }
+
+    /**
+     * @param {PointerEvent} event
+     */
+    function on3DPointerUp(event) {
+      if (!pointerState.active || event.pointerId !== pointerState.pointerId) {
+        return;
+      }
+      pointerState.active = false;
+      pointerState.pointerId = null;
+      view3dCanvas.releasePointerCapture(event.pointerId);
+    }
+
+    controls.randomizeButton.addEventListener('click', applyRandomizedParams);
+    controls.applySeedButton.addEventListener('click', applySeedParams);
+    controls.resetViewButton.addEventListener('click', () => {
+      resetView3D();
+      redraw();
+    });
+    controls.exportButton.addEventListener('click', exportViews);
+
+    const liveUpdateInputs = [
+      controls.edges,
+      controls.sequence,
+      controls.apseSize,
+      controls.apseRatio,
+      controls.divisionThreshold,
+      controls.columnSize,
+      controls.chapelScale,
+      controls.heightScale,
+      controls.displayMode,
+      controls.seed
+    ];
+
+    for (const el of liveUpdateInputs) {
+      el.addEventListener('input', redraw);
+      el.addEventListener('change', redraw);
+    }
+
+    view3dCanvas.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+    });
+    view3dCanvas.addEventListener('pointerdown', on3DPointerDown);
+    view3dCanvas.addEventListener('pointermove', on3DPointerMove);
+    view3dCanvas.addEventListener('pointerup', on3DPointerUp);
+    view3dCanvas.addEventListener('pointercancel', on3DPointerUp);
+    view3dCanvas.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault();
+        const zoomFactor = Math.exp(-event.deltaY * 0.0012);
+        viewState.zoom = clamp(viewState.zoom * zoomFactor, 0.35, 5);
+        redraw();
+      },
+      { passive: false }
+    );
+    view3dCanvas.addEventListener('dblclick', () => {
+      resetView3D();
+      redraw();
+    });
+
+    redraw();
+  </script>
+</body>
+</html>
