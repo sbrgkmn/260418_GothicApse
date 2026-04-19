@@ -793,9 +793,18 @@
        * @param {number} level
        */
       function recurseAmbulatory(innerRadius, outerRadius, level) {
-        const ring = generateRingPoints(innerRadius, outerRadius, params.edges, Math.PI);
         const ringWidth = outerRadius - innerRadius;
-        rings.push({ ...ring, level, ringWidth });
+        const canRecurse = ringWidth > params.divisionThreshold && level < params.sequence.length - 1;
+        let currentOuterRadius = outerRadius;
+        if (canRecurse) {
+          const segmentCount = params.sequence[level] || 1;
+          const segmentRatio = 1 / (segmentCount + 1);
+          currentOuterRadius = innerRadius + ringWidth * segmentRatio;
+        }
+
+        const ring = generateRingPoints(innerRadius, currentOuterRadius, params.edges, Math.PI);
+        const currentWidth = currentOuterRadius - innerRadius;
+        rings.push({ ...ring, level, ringWidth: currentWidth });
 
         for (let i = 0; i < ring.innerPoints.length; i++) {
           updateBounds(ring.innerPoints[i]);
@@ -819,12 +828,8 @@
           segments.push({ p1: ring.outerPoints[i], p2: ring.innerPoints[i + 1], level, kind: 'ring-diagonal' });
         }
 
-        const canRecurse = ringWidth > params.divisionThreshold && level < params.sequence.length - 1;
         if (canRecurse) {
-          const segmentCount = params.sequence[level] || 1;
-          const segmentRatio = 1 / (segmentCount + 1);
-          const nextInnerRadius = outerRadius - ringWidth * segmentRatio;
-          recurseAmbulatory(nextInnerRadius, outerRadius, level + 1);
+          recurseAmbulatory(currentOuterRadius, outerRadius, level + 1);
         }
       }
 
@@ -1065,11 +1070,13 @@
       recurseAmbulatory(innerRadius, ambulatorySize, 0);
 
       if (rings.length > 0) {
-        const baseRing = rings[0];
-        for (let i = 0; i < baseRing.outerPoints.length - 1; i++) {
-          recurseChapel(baseRing.outerPoints[i], baseRing.outerPoints[i + 1], chapelSize, 0);
+        const outerRing = getOutermostRing(rings);
+        if (outerRing) {
+          for (let i = 0; i < outerRing.outerPoints.length - 1; i++) {
+            recurseChapel(outerRing.outerPoints[i], outerRing.outerPoints[i + 1], chapelSize, 0);
+          }
+          addSupportSystem(outerRing);
         }
-        addSupportSystem(baseRing);
       }
 
       if (!Number.isFinite(bounds.minX)) {
@@ -1142,6 +1149,46 @@
     }
 
     /**
+     * @param {Ring2D} ring
+     * @returns {number}
+     */
+    function ringInnerRadius(ring) {
+      const point = ring.innerPoints[0];
+      return point ? Math.hypot(point.x, point.y) : 0;
+    }
+
+    /**
+     * @param {Ring2D} ring
+     * @returns {number}
+     */
+    function ringOuterRadius(ring) {
+      const point = ring.outerPoints[0];
+      return point ? Math.hypot(point.x, point.y) : 0;
+    }
+
+    /**
+     * @param {Ring2D[]} rings
+     * @returns {Ring2D | null}
+     */
+    function getInnermostRing(rings) {
+      if (!rings.length) {
+        return null;
+      }
+      return rings.reduce((best, ring) => (ringInnerRadius(ring) < ringInnerRadius(best) ? ring : best), rings[0]);
+    }
+
+    /**
+     * @param {Ring2D[]} rings
+     * @returns {Ring2D | null}
+     */
+    function getOutermostRing(rings) {
+      if (!rings.length) {
+        return null;
+      }
+      return rings.reduce((best, ring) => (ringOuterRadius(ring) > ringOuterRadius(best) ? ring : best), rings[0]);
+    }
+
+    /**
      * @param {Point2[]} points
      * @param {Point2} point
      */
@@ -1157,7 +1204,7 @@
      */
     function buildPerimeterPolyline2D(geometry2D) {
       const perimeter = [];
-      const outerRing = geometry2D.rings[0];
+      const outerRing = getOutermostRing(geometry2D.rings);
       if (!outerRing || outerRing.outerPoints.length < 2) {
         return perimeter;
       }
@@ -1303,12 +1350,12 @@
         return geometry2D;
       }
 
-      const baseRing = geometry2D.rings[0];
-      if (!baseRing || baseRing.outerPoints.length < 2) {
+      const outerRing = getOutermostRing(geometry2D.rings);
+      if (!outerRing || outerRing.outerPoints.length < 2) {
         return geometry2D;
       }
 
-      const bayIndex = Math.floor((baseRing.outerPoints.length - 2) / 2);
+      const bayIndex = Math.floor((outerRing.outerPoints.length - 2) / 2);
       const rings = geometry2D.rings.map((ring) => ({
         ...ring,
         innerPoints: [ring.innerPoints[bayIndex], ring.innerPoints[bayIndex + 1]].filter(Boolean),
@@ -1331,8 +1378,8 @@
       const chapels = [];
       /** @type {Termination2D[]} */
       const terminations = [];
-      let start = baseRing.outerPoints[bayIndex];
-      let end = baseRing.outerPoints[bayIndex + 1];
+      let start = outerRing.outerPoints[bayIndex];
+      let end = outerRing.outerPoints[bayIndex + 1];
       for (let guard = 0; guard < 32; guard++) {
         const chapel = chapelByBase.get(`${pointKey(start)}>${pointKey(end)}`);
         if (!chapel) {
@@ -1430,6 +1477,10 @@
       const curves = [];
       /** @type {Surface3D[]} */
       const surfaces = [];
+      /** @type {Map<string, number>} */
+      const roofEdgeHeights = new Map();
+      /** @type {Map<string, {a:Point2, b:Point2, heights:number[]}>} */
+      const roofBoundarySegments = new Map();
       const heightBase = params.heightScale;
       const outerRadius = Math.max(geometry2D.meta.outerRadius, 1);
       const supportSpan = Math.max(outerRadius + geometry2D.meta.supportDepth * 0.6, 1);
@@ -1489,6 +1540,38 @@
           return;
         }
         surfaces.push({ points, shade, alpha, kind });
+      }
+
+      /**
+       * @param {Point2} point
+       * @param {number} height
+       */
+      function registerRoofEdgeHeight(point, height) {
+        const key = pointKey(point);
+        const previous = roofEdgeHeights.get(key);
+        roofEdgeHeights.set(key, previous === undefined ? height : Math.max(previous, height));
+      }
+
+      /**
+       * @param {Point2} a
+       * @param {Point2} b
+       * @param {number} height
+       */
+      function registerRoofBoundarySegment(a, b, height) {
+        const aKey = pointKey(a);
+        const bKey = pointKey(b);
+        const isForward = aKey <= bKey;
+        const key = isForward ? `${aKey}>${bKey}` : `${bKey}>${aKey}`;
+        const entry = roofBoundarySegments.get(key);
+        if (entry) {
+          entry.heights.push(height);
+          return;
+        }
+        roofBoundarySegments.set(key, {
+          a: isForward ? a : b,
+          b: isForward ? b : a,
+          heights: [height]
+        });
       }
 
       /**
@@ -1631,11 +1714,7 @@
       }
 
       const heightNorm = clamp((params.heightScale - 60) / 700, 0, 1);
-      const orderedRings = [...geometry2D.rings].sort((left, right) => {
-        const leftRadius = averagePoint([...left.innerPoints, ...left.outerPoints]);
-        const rightRadius = averagePoint([...right.innerPoints, ...right.outerPoints]);
-        return distance2D(geometry2D.meta.center, leftRadius) - distance2D(geometry2D.meta.center, rightRadius);
-      });
+      const orderedRings = [...geometry2D.rings].sort((left, right) => ringInnerRadius(left) - ringInnerRadius(right));
       const ambulatoryTierCount = Math.max(1, orderedRings.length);
       const ringStepsFromOuter = new Map();
       orderedRings.forEach((ring, index) => {
@@ -1727,6 +1806,15 @@
       }
 
       /**
+       * @param {Point2} point
+       * @param {number} stepFromOuter
+       * @returns {{spring:number, crown:number}}
+       */
+      function ambulatoryTierHeights(point, stepFromOuter) {
+        return sectionHeights(point, clamp(stepFromOuter, 1, ambulatoryTierCount), 'ring');
+      }
+
+      /**
        * @param {Point2[]} corners
        * @param {{spring:number, crown:number}} heights
        * @param {number} shade
@@ -1739,8 +1827,19 @@
 
         const center = lineIntersection(corners[0], corners[2], corners[1], corners[3]);
         for (const corner of corners) {
+          registerRoofEdgeHeight(corner, heights.spring);
           addStem(corner, heights.spring, 0.2, 1.05, 0.78, `${kind}-stem`);
           addPointedRib(corner, center, heights.spring, heights.crown, shade, 1.04, 0.88, `${kind}-rib`);
+        }
+        for (let i = 0; i < corners.length; i++) {
+          const next = corners[(i + 1) % corners.length];
+          registerRoofBoundarySegment(corners[i], next, heights.spring);
+          addSurface(
+            [to3D(corners[i], heights.spring), to3D(next, heights.spring), to3D(center, heights.crown)],
+            shade + 0.08,
+            0.24,
+            `${kind}-shell-${i}`
+          );
         }
       }
 
@@ -1753,8 +1852,18 @@
        */
       function addFanBay(points, center, heights, shade, kind) {
         for (const point of points) {
+          registerRoofEdgeHeight(point, heights.spring);
           addStem(point, heights.spring, 0.2, 0.92, 0.72, `${kind}-stem`);
           addPointedRib(point, center, heights.spring, heights.crown, shade, 0.96, 0.84, `${kind}-rib`);
+        }
+        for (let i = 0; i < points.length - 1; i++) {
+          registerRoofBoundarySegment(points[i], points[i + 1], heights.spring);
+          addSurface(
+            [to3D(points[i], heights.spring), to3D(points[i + 1], heights.spring), to3D(center, heights.crown)],
+            shade + 0.06,
+            0.24,
+            `${kind}-shell-${i}`
+          );
         }
       }
 
@@ -1788,37 +1897,30 @@
         const columnHeights = new Array(nodes.length);
         const receiveHeights = new Array(nodes.length);
         const launchHeights = new Array(nodes.length);
-        const supportRise = Math.max(heightBase * 0.04, ambulatoryStep * 0.52);
-        const launchGap = Math.max(heightBase * 0.035, ambulatoryStep * 0.3);
+        const supportRise = Math.max(heightBase * 0.03, ambulatoryStep * 0.34);
+        const launchGap = Math.max(heightBase * 0.03, ambulatoryStep * 0.24);
+        const supportExtension = Math.max(heightBase * 0.045, ambulatoryStep * 0.3);
 
-        for (let i = 0; i < nodes.length; i++) {
-          const point = nodes[i];
-          const crown =
-            outerAmbulatoryCrown +
-            Math.min(i, ambulatoryTierCount) * ambulatoryStep +
-            axialBoost(point, 0.26 + i * 0.08);
-          columnHeights[i] = crown;
-        }
-
-        receiveHeights[0] = Math.min(columnHeights[0] * 0.72, Math.max(heightBase * 0.24, columnHeights[0] * 0.58));
-        launchHeights[0] = Math.min(columnHeights[0] * 0.84, receiveHeights[0] + launchGap);
+        const outerRoof = sectionHeights(axis.anchor, 0, 'chapel');
+        receiveHeights[0] = outerRoof.spring;
+        columnHeights[0] = outerRoof.spring + supportExtension;
+        launchHeights[0] = Math.min(columnHeights[0] - heightBase * 0.012, receiveHeights[0] + launchGap);
 
         for (let i = 1; i < nodes.length; i++) {
-          receiveHeights[i] = Math.min(
-            columnHeights[i] * 0.76,
-            Math.max(receiveHeights[i - 1] + supportRise, columnHeights[i - 1] + supportRise * 0.92)
-          );
+          const roof = ambulatoryTierHeights(nodes[i], i);
+          receiveHeights[i] = Math.max(roof.spring, receiveHeights[i - 1] + supportRise);
+          columnHeights[i] = Math.max(receiveHeights[i] + supportExtension, columnHeights[i - 1] + supportRise * 0.72);
           launchHeights[i] = Math.min(
-            columnHeights[i] * 0.9,
+            columnHeights[i] - heightBase * 0.012,
             Math.max(receiveHeights[i] + launchGap, launchHeights[i - 1] + supportRise)
           );
         }
 
         const pierTop = Math.max(
           heightBase * 0.18,
-          columnHeights[0] * 0.54
+          receiveHeights[0] * 0.92
         );
-        const pierArchHeight = Math.max(heightBase * 0.17, receiveHeights[0] * 0.8);
+        const pierArchHeight = Math.max(heightBase * 0.17, receiveHeights[0] * 0.94);
 
         return {
           pierTop,
@@ -1829,21 +1931,22 @@
         };
       }
 
-      const baseRing = geometry2D.rings[0];
+      const innerRing = getInnermostRing(geometry2D.rings);
+      const outerRing = getOutermostRing(geometry2D.rings);
       let centralHeights = null;
       let outerTierHeights = null;
-      if (baseRing && baseRing.innerPoints.length >= 2) {
+      if (innerRing && innerRing.innerPoints.length >= 2) {
         centralHeights = sectionHeights({ x: 0, y: -outerRadius * 0.46 }, 0, 'central');
         addFanBay(
-          baseRing.innerPoints,
+          innerRing.innerPoints,
           geometry2D.meta.center,
           centralHeights,
           0.66,
           'central'
         );
-        addPlanLoop(baseRing.innerPoints, 0, 0.42, 0.95, 0.46, 'bay-plan-central');
-        addPlanLoop(baseRing.innerPoints, centralHeights.spring, 0.22, 0.88, 0.26, 'tier-central');
-        for (const point of baseRing.innerPoints) {
+        addPlanLoop(innerRing.innerPoints, 0, 0.42, 0.95, 0.46, 'bay-plan-central');
+        addPlanLoop(innerRing.innerPoints, centralHeights.spring, 0.22, 0.88, 0.26, 'tier-central');
+        for (const point of innerRing.innerPoints) {
           addCurve(
             [to3D(geometry2D.meta.center, 0), to3D(point, 0)],
             0.42,
@@ -1852,8 +1955,10 @@
             'bay-plan-central-radial'
           );
         }
-        outerTierHeights = sectionHeights(averagePoint(baseRing.outerPoints), 0, 'chapel');
-        addPlanLoop(baseRing.outerPoints, outerTierHeights.spring, 0.16, 0.82, 0.22, 'tier-outer-ambulatory');
+      }
+      if (outerRing && outerRing.outerPoints.length >= 2) {
+        outerTierHeights = sectionHeights(averagePoint(outerRing.outerPoints), 0, 'chapel');
+        addPlanLoop(outerRing.outerPoints, outerTierHeights.spring, 0.16, 0.82, 0.22, 'tier-outer-ambulatory');
       }
 
       for (const ring of geometry2D.rings) {
@@ -1911,106 +2016,47 @@
         addFanBay(term.columnPoints, term.center, heights, 0.44, `termination-${term.level}`);
       }
 
-      if (baseRing && centralHeights && outerTierHeights) {
-        const ringTierLoops = [...geometry2D.rings]
-          .map((ring) => {
-            const stepsFromOuter = ringStepsFromOuter.get(ring.level) || 1;
-            return {
-              points: ring.innerPoints,
-              height: sectionHeights(averagePoint(ring.innerPoints), stepsFromOuter, 'ring').spring,
-              order: stepsFromOuter,
-              level: ring.level
-            };
-          })
-          .sort((left, right) => right.order - left.order);
-
-        addCapSurface(baseRing.innerPoints, centralHeights.spring, 0.74, 0.16, 'shell-central-cap');
-
-        if (ringTierLoops.length > 0) {
-          addStripSurface(
-            baseRing.innerPoints,
-            centralHeights.spring,
-            ringTierLoops[0].points,
-            ringTierLoops[0].height,
-            0.68,
-            0.12,
-            'shell-central-drop'
-          );
-        }
-
-        for (let i = 0; i < ringTierLoops.length - 1; i++) {
-          addStripSurface(
-            ringTierLoops[i].points,
-            ringTierLoops[i].height,
-            ringTierLoops[i + 1].points,
-            ringTierLoops[i + 1].height,
-            0.64 - i * 0.02,
-            0.12,
-            `shell-tier-${ringTierLoops[i].level}-${ringTierLoops[i + 1].level}`
-          );
-        }
-
-        const outermostTier = ringTierLoops[ringTierLoops.length - 1];
-        if (outermostTier) {
-          addStripSurface(
-            outermostTier.points,
-            outermostTier.height,
-            baseRing.outerPoints,
-            outerTierHeights.spring,
-            0.56,
-            0.14,
-            'shell-outer-tier'
-          );
-        }
-
+      if (outerRing && outerTierHeights) {
         const perimeterPolyline = geometry2D.meta.perimeterPolyline;
-        if (perimeterPolyline.length >= 2) {
-          addStripSurface(
-            perimeterPolyline,
-            0,
-            perimeterPolyline,
-            outerTierHeights.spring,
-            0.42,
-            0.13,
-            'shell-perimeter-wall'
-          );
-        }
-
-        for (const chapel of geometry2D.chapels) {
-          const chapelHeights = sectionHeights(chapelReferencePoint(chapel), chapel.level, 'chapel');
+        for (let i = 0; i < perimeterPolyline.length - 1; i++) {
+          const start = perimeterPolyline[i];
+          const end = perimeterPolyline[i + 1];
+          const startHeight = roofEdgeHeights.get(pointKey(start));
+          const endHeight = roofEdgeHeights.get(pointKey(end));
+          if (startHeight === undefined || endHeight === undefined) {
+            continue;
+          }
           addQuadSurface(
-            to3D(chapel.bottom1, chapelHeights.spring),
-            to3D(chapel.bottom2, chapelHeights.spring),
-            to3D(chapel.top2, chapelHeights.spring),
-            to3D(chapel.top1, chapelHeights.spring),
-            chapel.isTerminal ? 0.54 : 0.5,
-            0.15,
-            `shell-chapel-top-${chapel.level}`
-          );
-          addQuadSurface(
-            to3D(chapel.top1, 0),
-            to3D(chapel.top2, 0),
-            to3D(chapel.top2, chapelHeights.spring),
-            to3D(chapel.top1, chapelHeights.spring),
+            to3D(start, 0),
+            to3D(end, 0),
+            to3D(end, endHeight),
+            to3D(start, startHeight),
             0.38,
-            0.12,
-            `shell-chapel-wall-${chapel.level}`
+            0.24,
+            `shell-perimeter-wall-${i}`
           );
         }
+      }
 
-        for (const term of geometry2D.terminations) {
-          const termHeights = sectionHeights(terminationReferencePoint(term), term.level, 'termination');
-          addCapSurface(term.columnPoints, termHeights.spring, 0.44, 0.14, `shell-termination-cap-${term.level}`);
-          addStripSurface(
-            term.columnPoints,
-            0,
-            term.columnPoints,
-            termHeights.spring,
-            0.36,
-            0.11,
-            `shell-termination-wall-${term.level}`
-          );
+      for (const [segmentKey, segment] of roofBoundarySegments.entries()) {
+        const normalizedHeights = [...new Set(segment.heights.map((height) => Number(height.toFixed(3))))].sort((a, b) => a - b);
+        if (normalizedHeights.length < 2) {
+          continue;
         }
+        const lowHeight = normalizedHeights[0];
+        const highHeight = normalizedHeights[normalizedHeights.length - 1];
+        if (highHeight - lowHeight < 1e-3) {
+          continue;
+        }
+        addQuadSurface(
+          to3D(segment.a, lowHeight),
+          to3D(segment.b, lowHeight),
+          to3D(segment.b, highHeight),
+          to3D(segment.a, highHeight),
+          0.46,
+          0.28,
+          `shell-step-wall-${segmentKey}`
+        );
       }
 
       for (const axis of geometry2D.supportAxes) {
@@ -2451,18 +2497,18 @@
 
       if (showShell) {
         for (const surface of transformedSurfaces) {
-          const fillGray = Math.round(158 + clamp(surface.shade, 0, 1) * 56);
-          const strokeGray = Math.max(90, fillGray - 34);
+          const fillGray = Math.round(132 + clamp(surface.shade, 0, 1) * 64);
+          const strokeGray = Math.max(82, fillGray - 28);
           ctx.beginPath();
           ctx.moveTo(surface.points[0].x * scale + tx, surface.points[0].y * scale + ty);
           for (let i = 1; i < surface.points.length; i++) {
             ctx.lineTo(surface.points[i].x * scale + tx, surface.points[i].y * scale + ty);
           }
           ctx.closePath();
-          ctx.fillStyle = `rgba(${fillGray}, ${fillGray}, ${fillGray}, ${clamp(surface.alpha, 0.08, 0.3)})`;
+          ctx.fillStyle = `rgba(${fillGray}, ${fillGray}, ${fillGray}, ${clamp(surface.alpha, 0.18, 0.58)})`;
           ctx.fill();
-          ctx.strokeStyle = `rgba(${strokeGray}, ${strokeGray}, ${strokeGray}, ${clamp(surface.alpha * 0.8, 0.05, 0.18)})`;
-          ctx.lineWidth = 0.7;
+          ctx.strokeStyle = `rgba(${strokeGray}, ${strokeGray}, ${strokeGray}, ${clamp(surface.alpha * 0.86, 0.14, 0.34)})`;
+          ctx.lineWidth = 1.0;
           ctx.stroke();
         }
       }
