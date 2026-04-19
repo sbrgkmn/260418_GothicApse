@@ -297,6 +297,16 @@
         <div class="value-row"><span>inspection</span><span id="displayModeValue">Full radial bay</span></div>
       </div>
 
+      <div class="control">
+        <label for="renderMode">3D render mode</label>
+        <select id="renderMode">
+          <option value="both" selected>Shell + wireframe</option>
+          <option value="wireframe">Wireframe only</option>
+          <option value="shell">Shell only</option>
+        </select>
+        <div class="value-row"><span>surface overlay</span><span id="renderModeValue">Shell + wireframe</span></div>
+      </div>
+
       <div class="control-section">
         <h3>Randomness</h3>
         <span>Randomize writes a new seed, Apply Seed replays the visible one</span>
@@ -313,7 +323,7 @@
         <button id="applySeedButton" class="secondary" type="button">Apply Seed</button>
         <button id="resetViewButton" class="secondary" type="button">Reset View</button>
         <button id="exportButton" type="button">Export PNG (2D + 3D)</button>
-        <span class="note">The 3D view stays fixed outside the apse. This morphology file now biases toward stepped ambulatory tiers, a stable chapel height band, and taller historical-style section profiles.</span>
+        <span class="note">The 3D view stays fixed outside the apse. Shell mode triangulates a light exterior envelope from the same stepped ambulatory and chapel rules used by the wireframe.</span>
       </div>
     </div>
 
@@ -333,6 +343,7 @@
     /** @typedef {{x:number, y:number}} Point2 */
     /** @typedef {{x:number, y:number, z:number}} Point3 */
     /** @typedef {{points:Point3[], shade:number, width:number, alpha:number, kind:string}} Curve3D */
+    /** @typedef {{points:Point3[], shade:number, alpha:number, kind:string}} Surface3D */
     /** @typedef {{p1:Point2, p2:Point2, level:number, kind:string}} Segment2 */
 
     /**
@@ -346,6 +357,7 @@
      * @property {number} chapelScale
      * @property {number} heightScale
      * @property {'full'|'single'} displayMode
+     * @property {'wireframe'|'shell'|'both'} renderMode
      * @property {number} seed
      */
 
@@ -421,6 +433,7 @@
     /**
      * @typedef {Object} Mesh3D
      * @property {Curve3D[]} curves
+     * @property {Surface3D[]} surfaces
      * @property {{minX:number,maxX:number,minY:number,maxY:number,minZ:number,maxZ:number}} bounds
      */
 
@@ -434,11 +447,12 @@
       sequence: document.getElementById('sequence'),
       apseSize: document.getElementById('apseSize'),
       apseRatio: document.getElementById('apseRatio'),
-      divisionThreshold: document.getElementById('divisionThreshold'),
+     divisionThreshold: document.getElementById('divisionThreshold'),
      columnSize: document.getElementById('columnSize'),
      chapelScale: document.getElementById('chapelScale'),
      heightScale: document.getElementById('heightScale'),
      displayMode: document.getElementById('displayMode'),
+     renderMode: document.getElementById('renderMode'),
       seed: document.getElementById('seed'),
       randomizeButton: document.getElementById('randomizeButton'),
       applySeedButton: document.getElementById('applySeedButton'),
@@ -456,6 +470,7 @@
       chapelScale: document.getElementById('chapelScaleValue'),
       heightScale: document.getElementById('heightScaleValue'),
       displayMode: document.getElementById('displayModeValue'),
+      renderMode: document.getElementById('renderModeValue'),
       seed: document.getElementById('seedValue')
     };
 
@@ -1413,6 +1428,8 @@
     function build3DRibNetwork(geometry2D, params) {
       /** @type {Curve3D[]} */
       const curves = [];
+      /** @type {Surface3D[]} */
+      const surfaces = [];
       const heightBase = params.heightScale;
       const outerRadius = Math.max(geometry2D.meta.outerRadius, 1);
       const supportSpan = Math.max(outerRadius + geometry2D.meta.supportDepth * 0.6, 1);
@@ -1459,6 +1476,79 @@
           return;
         }
         curves.push({ points, shade, width, alpha, kind });
+      }
+
+      /**
+       * @param {Point3[]} points
+       * @param {number} shade
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addSurface(points, shade, alpha, kind) {
+        if (points.length < 3) {
+          return;
+        }
+        surfaces.push({ points, shade, alpha, kind });
+      }
+
+      /**
+       * @param {Point3} p1
+       * @param {Point3} p2
+       * @param {Point3} p3
+       * @param {Point3} p4
+       * @param {number} shade
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addQuadSurface(p1, p2, p3, p4, shade, alpha, kind) {
+        addSurface([p1, p2, p3], shade, alpha, `${kind}-a`);
+        addSurface([p1, p3, p4], shade, alpha, `${kind}-b`);
+      }
+
+      /**
+       * @param {Point2[]} loopA
+       * @param {number} heightA
+       * @param {Point2[]} loopB
+       * @param {number} heightB
+       * @param {number} shade
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addStripSurface(loopA, heightA, loopB, heightB, shade, alpha, kind) {
+        const count = Math.min(loopA.length, loopB.length) - 1;
+        for (let i = 0; i < count; i++) {
+          addQuadSurface(
+            to3D(loopA[i], heightA),
+            to3D(loopA[i + 1], heightA),
+            to3D(loopB[i + 1], heightB),
+            to3D(loopB[i], heightB),
+            shade,
+            alpha,
+            `${kind}-${i}`
+          );
+        }
+      }
+
+      /**
+       * @param {Point2[]} points
+       * @param {number} height
+       * @param {number} shade
+       * @param {number} alpha
+       * @param {string} kind
+       */
+      function addCapSurface(points, height, shade, alpha, kind) {
+        if (points.length < 3) {
+          return;
+        }
+        const center = averagePoint(points);
+        for (let i = 0; i < points.length - 1; i++) {
+          addSurface(
+            [to3D(center, height), to3D(points[i], height), to3D(points[i + 1], height)],
+            shade,
+            alpha,
+            `${kind}-${i}`
+          );
+        }
       }
 
       /**
@@ -1740,8 +1830,10 @@
       }
 
       const baseRing = geometry2D.rings[0];
+      let centralHeights = null;
+      let outerTierHeights = null;
       if (baseRing && baseRing.innerPoints.length >= 2) {
-        const centralHeights = sectionHeights({ x: 0, y: -outerRadius * 0.46 }, 0, 'central');
+        centralHeights = sectionHeights({ x: 0, y: -outerRadius * 0.46 }, 0, 'central');
         addFanBay(
           baseRing.innerPoints,
           geometry2D.meta.center,
@@ -1760,7 +1852,7 @@
             'bay-plan-central-radial'
           );
         }
-        const outerTierHeights = sectionHeights(averagePoint(baseRing.outerPoints), 0, 'chapel');
+        outerTierHeights = sectionHeights(averagePoint(baseRing.outerPoints), 0, 'chapel');
         addPlanLoop(baseRing.outerPoints, outerTierHeights.spring, 0.16, 0.82, 0.22, 'tier-outer-ambulatory');
       }
 
@@ -1817,6 +1909,108 @@
           `bay-plan-termination-${term.level}`
         );
         addFanBay(term.columnPoints, term.center, heights, 0.44, `termination-${term.level}`);
+      }
+
+      if (baseRing && centralHeights && outerTierHeights) {
+        const ringTierLoops = [...geometry2D.rings]
+          .map((ring) => {
+            const stepsFromOuter = ringStepsFromOuter.get(ring.level) || 1;
+            return {
+              points: ring.innerPoints,
+              height: sectionHeights(averagePoint(ring.innerPoints), stepsFromOuter, 'ring').spring,
+              order: stepsFromOuter,
+              level: ring.level
+            };
+          })
+          .sort((left, right) => right.order - left.order);
+
+        addCapSurface(baseRing.innerPoints, centralHeights.spring, 0.74, 0.16, 'shell-central-cap');
+
+        if (ringTierLoops.length > 0) {
+          addStripSurface(
+            baseRing.innerPoints,
+            centralHeights.spring,
+            ringTierLoops[0].points,
+            ringTierLoops[0].height,
+            0.68,
+            0.12,
+            'shell-central-drop'
+          );
+        }
+
+        for (let i = 0; i < ringTierLoops.length - 1; i++) {
+          addStripSurface(
+            ringTierLoops[i].points,
+            ringTierLoops[i].height,
+            ringTierLoops[i + 1].points,
+            ringTierLoops[i + 1].height,
+            0.64 - i * 0.02,
+            0.12,
+            `shell-tier-${ringTierLoops[i].level}-${ringTierLoops[i + 1].level}`
+          );
+        }
+
+        const outermostTier = ringTierLoops[ringTierLoops.length - 1];
+        if (outermostTier) {
+          addStripSurface(
+            outermostTier.points,
+            outermostTier.height,
+            baseRing.outerPoints,
+            outerTierHeights.spring,
+            0.56,
+            0.14,
+            'shell-outer-tier'
+          );
+        }
+
+        const perimeterPolyline = geometry2D.meta.perimeterPolyline;
+        if (perimeterPolyline.length >= 2) {
+          addStripSurface(
+            perimeterPolyline,
+            0,
+            perimeterPolyline,
+            outerTierHeights.spring,
+            0.42,
+            0.13,
+            'shell-perimeter-wall'
+          );
+        }
+
+        for (const chapel of geometry2D.chapels) {
+          const chapelHeights = sectionHeights(chapelReferencePoint(chapel), chapel.level, 'chapel');
+          addQuadSurface(
+            to3D(chapel.bottom1, chapelHeights.spring),
+            to3D(chapel.bottom2, chapelHeights.spring),
+            to3D(chapel.top2, chapelHeights.spring),
+            to3D(chapel.top1, chapelHeights.spring),
+            chapel.isTerminal ? 0.54 : 0.5,
+            0.15,
+            `shell-chapel-top-${chapel.level}`
+          );
+          addQuadSurface(
+            to3D(chapel.top1, 0),
+            to3D(chapel.top2, 0),
+            to3D(chapel.top2, chapelHeights.spring),
+            to3D(chapel.top1, chapelHeights.spring),
+            0.38,
+            0.12,
+            `shell-chapel-wall-${chapel.level}`
+          );
+        }
+
+        for (const term of geometry2D.terminations) {
+          const termHeights = sectionHeights(terminationReferencePoint(term), term.level, 'termination');
+          addCapSurface(term.columnPoints, termHeights.spring, 0.44, 0.14, `shell-termination-cap-${term.level}`);
+          addStripSurface(
+            term.columnPoints,
+            0,
+            term.columnPoints,
+            termHeights.spring,
+            0.36,
+            0.11,
+            `shell-termination-wall-${term.level}`
+          );
+        }
       }
 
       for (const axis of geometry2D.supportAxes) {
@@ -1893,12 +2087,23 @@
         }
       }
 
+      for (const surface of surfaces) {
+        for (const point of surface.points) {
+          bounds.minX = Math.min(bounds.minX, point.x);
+          bounds.maxX = Math.max(bounds.maxX, point.x);
+          bounds.minY = Math.min(bounds.minY, point.y);
+          bounds.maxY = Math.max(bounds.maxY, point.y);
+          bounds.minZ = Math.min(bounds.minZ, point.z);
+          bounds.maxZ = Math.max(bounds.maxZ, point.z);
+        }
+      }
+
       if (!Number.isFinite(bounds.minX)) {
         bounds.minX = bounds.minY = bounds.minZ = -1;
         bounds.maxX = bounds.maxY = bounds.maxZ = 1;
       }
 
-      return { curves, bounds };
+      return { curves, surfaces, bounds };
     }
 
     /**
@@ -2160,13 +2365,16 @@
 
       const yawRad = (FIXED_ISO_YAW * Math.PI) / 180;
       const pitchRad = (FIXED_ISO_PITCH * Math.PI) / 180;
-      const transformed = [];
+      const transformedCurves = [];
+      const transformedSurfaces = [];
       const projectedBounds = {
         minX: Number.POSITIVE_INFINITY,
         maxX: Number.NEGATIVE_INFINITY,
         minY: Number.POSITIVE_INFINITY,
         maxY: Number.NEGATIVE_INFINITY
       };
+      const showShell = params.renderMode !== 'wireframe';
+      const showWireframe = params.renderMode !== 'shell';
 
       for (const curve of mesh3D.curves) {
         const points = curve.points.map((point) => {
@@ -2182,7 +2390,7 @@
         }
 
         const depth = points.reduce((sum, point) => sum + point.z, 0) / Math.max(1, points.length);
-        transformed.push({
+        transformedCurves.push({
           points,
           shade: curve.shade,
           width: curve.width,
@@ -2192,7 +2400,30 @@
         });
       }
 
-      if (transformed.length === 0) {
+      for (const surface of mesh3D.surfaces) {
+        const points = surface.points.map((point) => {
+          const rotated = rotateForCamera(point, yawRad, pitchRad);
+          return { x: rotated.x, y: -rotated.y, z: rotated.z };
+        });
+
+        for (const point of points) {
+          projectedBounds.minX = Math.min(projectedBounds.minX, point.x);
+          projectedBounds.maxX = Math.max(projectedBounds.maxX, point.x);
+          projectedBounds.minY = Math.min(projectedBounds.minY, point.y);
+          projectedBounds.maxY = Math.max(projectedBounds.maxY, point.y);
+        }
+
+        const depth = points.reduce((sum, point) => sum + point.z, 0) / Math.max(1, points.length);
+        transformedSurfaces.push({
+          points,
+          shade: surface.shade,
+          alpha: surface.alpha,
+          kind: surface.kind,
+          depth
+        });
+      }
+
+      if (transformedCurves.length === 0 && transformedSurfaces.length === 0) {
         return;
       }
 
@@ -2206,18 +2437,41 @@
       const tx = width / 2 - midX * scale + viewState.panX;
       const ty = height / 2 - midY * scale + viewState.panY;
 
-      transformed.sort((m, n) => {
+      transformedCurves.sort((m, n) => {
         const perimeterDelta = Number(m.kind === 'perimeter') - Number(n.kind === 'perimeter');
         if (perimeterDelta !== 0) {
           return perimeterDelta;
         }
         return m.depth - n.depth;
       });
+      transformedSurfaces.sort((m, n) => m.depth - n.depth);
 
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      for (const curve of transformed) {
+      if (showShell) {
+        for (const surface of transformedSurfaces) {
+          const fillGray = Math.round(158 + clamp(surface.shade, 0, 1) * 56);
+          const strokeGray = Math.max(90, fillGray - 34);
+          ctx.beginPath();
+          ctx.moveTo(surface.points[0].x * scale + tx, surface.points[0].y * scale + ty);
+          for (let i = 1; i < surface.points.length; i++) {
+            ctx.lineTo(surface.points[i].x * scale + tx, surface.points[i].y * scale + ty);
+          }
+          ctx.closePath();
+          ctx.fillStyle = `rgba(${fillGray}, ${fillGray}, ${fillGray}, ${clamp(surface.alpha, 0.08, 0.3)})`;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(${strokeGray}, ${strokeGray}, ${strokeGray}, ${clamp(surface.alpha * 0.8, 0.05, 0.18)})`;
+          ctx.lineWidth = 0.7;
+          ctx.stroke();
+        }
+      }
+
+      if (!showWireframe) {
+        return;
+      }
+
+      for (const curve of transformedCurves) {
         const gray = Math.round(18 + clamp(curve.shade, 0, 1) * 92);
         const widthPx = clamp(curve.width * Math.max(0.7, scale * 0.01), 0.9, 3.4);
         ctx.beginPath();
@@ -2244,6 +2498,7 @@
         chapelScale: parseInt(controls.chapelScale.value, 10) / 100,
         heightScale: parseInt(controls.heightScale.value, 10),
         displayMode: controls.displayMode.value === 'single' ? 'single' : 'full',
+        renderMode: controls.renderMode.value === 'wireframe' || controls.renderMode.value === 'shell' ? controls.renderMode.value : 'both',
         seed: (parseInt(controls.seed.value, 10) >>> 0) || 0
       };
     }
@@ -2279,6 +2534,9 @@
       if (params.displayMode === 'single' || params.displayMode === 'full') {
         controls.displayMode.value = params.displayMode;
       }
+      if (params.renderMode === 'wireframe' || params.renderMode === 'shell' || params.renderMode === 'both') {
+        controls.renderMode.value = params.renderMode;
+      }
       if (typeof params.seed === 'number') {
         controls.seed.value = String(params.seed >>> 0);
       }
@@ -2297,6 +2555,8 @@
       labels.chapelScale.textContent = params.chapelScale.toFixed(2);
       labels.heightScale.textContent = String(params.heightScale);
       labels.displayMode.textContent = params.displayMode === 'single' ? 'Single bay' : 'Full radial bay';
+      labels.renderMode.textContent =
+        params.renderMode === 'wireframe' ? 'Wireframe only' : params.renderMode === 'shell' ? 'Shell only' : 'Shell + wireframe';
       labels.seed.textContent = String(params.seed >>> 0);
     }
 
@@ -2409,6 +2669,7 @@
       controls.chapelScale,
       controls.heightScale,
       controls.displayMode,
+      controls.renderMode,
       controls.seed
     ];
 
